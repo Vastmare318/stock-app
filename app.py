@@ -47,7 +47,9 @@ if st.button("🔍 診断を実行する", type="primary"):
             time.sleep(0.5)
 
         price = info.get('currentPrice') or info.get('regularMarketPrice') or 0
-        div_yield = (info.get('dividendYield') or 0) * 100
+                raw_div = info.get('dividendYield') or 0
+        div_yield = raw_div if raw_div > 1 else raw_div * 100
+
         payout_ratio = (info.get('payoutRatio') or 0) * 100
         pbr = info.get('priceToBook') or 0
         sector = info.get('sector', '')

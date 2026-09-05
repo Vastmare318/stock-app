@@ -14,7 +14,7 @@ session.headers.update({
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
 })
 
-# 日本株の主要銘柄・会社名マップ
+# 日本株の主要銘柄・会社名マップ（必要に応じて追加できます）
 STOCK_NAMES = {
     "8316": "三井住友フィナンシャルグループ",
     "8593": "三菱HCキャピタル",
@@ -31,10 +31,10 @@ if st.button("🔍 診断を実行する", type="primary"):
     with st.spinner("データを取得・解析中..."):
         symbol = f"{ticker_code}.T"
         
-        # 1. 会社名の取得（マップになければ「銘柄コード: XXXX」）
+        # 1. 会社名の取得（マップになければ「銘柄コード: XXXX」を表示）
         name = STOCK_NAMES.get(ticker_code, f"銘柄コード: {ticker_code}")
         
-        # 2. 株価などの取得
+        # 2. 株価・財務データの取得（リトライ処理付き）
         stock = yf.Ticker(symbol, session=session)
         info = {}
         for _ in range(3):
@@ -58,3 +58,34 @@ if st.button("🔍 診断を実行する", type="primary"):
         col1.metric("現在株価", f"{price:,.0f} 円" if price else "---")
         col2.metric("配当利回り", f"{div_yield:.2f}%" if div_yield else "---")
         col3.metric("PBR", f"{pbr:.2f}倍" if pbr else "---")
+
+        st.markdown("---")
+        st.subheader("📋 8ステップ詳細判定")
+
+        clear_count = 0
+
+        # 1. 配当利回り
+        if div_yield >= 2.5:
+            st.success(f"1. 配当利回り: 🟢 {div_yield:.2f}% (基準2.5%以上クリア)")
+            clear_count += 1
+        else:
+            st.warning(f"1. 配当利回り: 🟡 {div_yield:.2f}% (2.5%未満)")
+
+        # 2. 配当性向
+        if 0 < payout_ratio <= 60:
+            st.success(f"2. 配当性向: 🟢 {payout_ratio:.1f}% (60%以下で健全)")
+            clear_count += 1
+        elif payout_ratio > 60:
+            st.error(f"2. 配当性向: 🔴 {payout_ratio:.1f}% (60%超過・減配注意)")
+        else:
+            st.info("2. 配当性向: ◯ データなし")
+
+        # 3. 自己資本比率（財務データ取得）
+        try:
+            balance = stock.balance_sheet
+            if balance is not None and not balance.empty:
+                st.info("3. 自己資本比率: 取得成功（詳細チェック中）")
+            else:
+                st.info("3. 自己資本比率: ◯ 金融/データ制限につき個別確認推奨")
+        except Exception:
+            st.info("3. 自己資本比率: ◯ データ保留")

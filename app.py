@@ -32,7 +32,7 @@ STOCK_NAMES = {
 }
 
 # 画面をタブで切り分ける
-tab1, tab2 = tab1, tab2 = st.tabs(["🔍 個別銘柄をくわしく診断", "📋 一覧リスト・財務グラフ比較"])
+tab1, tab2 = st.tabs(["🔍 個別銘柄をくわしく診断", "📋 一覧リスト・財務グラフ比較"])
 
 # ==========================================
 # タブ1：個別銘柄診断
@@ -65,6 +65,11 @@ with tab1:
 
             # 概要カード表示
             st.subheader(f"📊 {name}")
+            
+            # みんかぶへのリンクボタン
+            minkabu_url = f"https://minkabu.jp/stock/{ticker_code}"
+            st.link_button("🌐 「みんかぶ」でこの銘柄のページを開く", minkabu_url)
+
             col1, col2, col3 = st.columns(3)
             col1.metric("現在株価", f"{price:,.0f} 円" if price else "---")
             col2.metric("配当利回り", f"{div_yield:.2f}%" if div_yield else "---")
@@ -117,24 +122,18 @@ with tab2:
                     pass
                 time.sleep(0.3)
             
-            # DataFrame化
             df = pd.DataFrame(table_data)
-            
-            # セッション状態に保存（グラフと表で共有するため）
             st.session_state['stock_df'] = df
 
-    # データが存在する場合に表示
     if 'stock_df' in st.session_state:
         df = st.session_state['stock_df']
         
         st.markdown("### 📊 視覚的ビジュアル比較（グラフ）")
         
-        # グラフを2列に分けて綺麗に配置
         g_col1, g_col2 = st.columns(2)
         
         with g_col1:
             st.markdown("##### 💰 配当利回りの比較 (%)")
-            # グラフ用にインデックスを銘柄名にしてバーチャート表示
             chart_div = df.set_index("銘柄名")["配当利回り(%)"]
             st.bar_chart(chart_div)
             
@@ -147,58 +146,3 @@ with tab2:
         st.markdown("### 📋 詳細データ一覧表")
         st.dataframe(df.sort_values(by="時価総額(億円)", ascending=False), use_container_width=True)
         st.success("✨ 一覧データおよびグラフの生成が完了しました！")
-# ==========================================
-# タブ1：個別銘柄診断
-# ==========================================
-with tab1:
-    st.subheader("個別銘柄 8ステップ詳細診断")
-    ticker_code = st.text_input("銘柄コードを入力してください（例: 8316, 7203, 8593）", value="8316")
-
-    if st.button("🔍 診断を実行する", type="primary"):
-        with st.spinner("データを取得・解析中..."):
-            symbol = f"{ticker_code}.T"
-            name = STOCK_NAMES.get(ticker_code, f"銘柄コード: {ticker_code}")
-            
-            stock = yf.Ticker(symbol, session=session)
-            info = {}
-            for _ in range(3):
-                try:
-                    info = stock.info or {}
-                    if info and 'currentPrice' in info:
-                        break
-                except Exception:
-                    pass
-                time.sleep(0.5)
-
-            price = info.get('currentPrice') or info.get('regularMarketPrice') or 0
-            raw_div = info.get('dividendYield') or 0
-            div_yield = raw_div if raw_div > 1 else raw_div * 100
-            payout_ratio = (info.get('payoutRatio') or 0) * 100
-            pbr = info.get('priceToBook') or 0
-
-            # 概要カード表示
-            st.subheader(f"📊 {name}")
-            
-            # 🔗 みんかぶへのリンクボタンをここに配置！
-            minkabu_url = f"https://minkabu.jp/stock/{ticker_code}"
-            st.link_button("🌐 「みんかぶ」でこの銘柄のページを開く", minkabu_url)
-
-            col1, col2, col3 = st.columns(3)
-            col1.metric("現在株価", f"{price:,.0f} 円" if price else "---")
-            col2.metric("配当利回り", f"{div_yield:.2f}%" if div_yield else "---")
-            col3.metric("PBR", f"{pbr:.2f}倍" if pbr else "---")
-
-            st.markdown("---")
-            st.subheader("📋 8ステップ詳細判定")
-
-            if div_yield >= 2.5:
-                st.success(f"1. 配当利回り: 🟢 {div_yield:.2f}% (基準2.5%以上クリア)")
-            else:
-                st.warning(f"1. 配当利回り: 🟡 {div_yield:.2f}% (2.5%未満)")
-
-            if 0 < payout_ratio <= 60:
-                st.success(f"2. 配当性向: 🟢 {payout_ratio:.1f}% (60%以下で健全)")
-            elif payout_ratio > 60:
-                st.error(f"2. 配当性向: 🔴 {payout_ratio:.1f}% (60%超過・減配注意)")
-            else:
-                st.info("2. 配当性向: ◯ データなし")

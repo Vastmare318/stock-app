@@ -3,7 +3,6 @@ import yfinance as yf
 import requests
 import time
 import pandas as pd
-import plotly.graph_objects as go
 
 st.set_page_config(page_title="高配当株 8ステップ分析ツール", layout="wide")
 
@@ -77,41 +76,22 @@ with tab1:
             col3.metric("PBR", f"{pbr:.2f}倍" if pbr else "---")
 
             st.markdown("---")
-            st.subheader("📊 過去の配当金推移（本のようなグラフ）")
+            st.subheader("📊 過去の年間1株配当推移")
             
             # 過去の配当金データを取得して年ごとに集計
             try:
                 dividends = stock.dividends
                 if not dividends.empty:
-                    # インデックスを年単位に変換して合算
                     div_df = dividends.resample('YE').sum().reset_index()
                     div_df['Year'] = div_df['Date'].dt.strftime('%Y年')
+                    div_df = div_df.tail(10) # 直近10年
                     
-                    # 直近の数年間に絞る（例: 直近10年）
-                    div_df = div_df.tail(10)
-                    
-                    # Plotlyで綺麗な棒グラフを作成
-                    fig = go.Figure(data=[
-                        go.Bar(
-                            x=div_df['Year'],
-                            y=div_df['Dividends'],
-                            marker_color='#2ca02c',
-                            text=div_df['Dividends'].round(2),
-                            textposition='auto',
-                        )
-                    ])
-                    fig.update_layout(
-                        title=f"{name} の年間1株配当推移",
-                        xaxis_title="年",
-                        yaxis_title="配当金 (円)",
-                        template="plotly_white",
-                        height=400
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
+                    chart_data = div_df.set_index('Year')['Dividends']
+                    st.bar_chart(chart_data)
                 else:
                     st.info("配当履歴データが見つかりませんでした。")
             except Exception as e:
-                st.warning(lict := f"配当グラフの生成中にエラーが発生しました: {e}")
+                st.warning(f"配当グラフの生成中にエラーが発生しました: {e}")
 
             st.markdown("---")
             st.subheader("📋 8ステップ詳細判定")

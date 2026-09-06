@@ -3,6 +3,7 @@ import yfinance as yf
 import requests
 import time
 import pandas as pd
+import plotly.graph_objects as go
 
 st.set_page_config(page_title="高配当株 8ステップ分析ツール", layout="wide")
 
@@ -76,6 +77,43 @@ with tab1:
             col3.metric("PBR", f"{pbr:.2f}倍" if pbr else "---")
 
             st.markdown("---")
+            st.subheader("📊 過去の配当金推移（本のようなグラフ）")
+            
+            # 過去の配当金データを取得して年ごとに集計
+            try:
+                dividends = stock.dividends
+                if not dividends.empty:
+                    # インデックスを年単位に変換して合算
+                    div_df = dividends.resample('YE').sum().reset_index()
+                    div_df['Year'] = div_df['Date'].dt.strftime('%Y年')
+                    
+                    # 直近の数年間に絞る（例: 直近10年）
+                    div_df = div_df.tail(10)
+                    
+                    # Plotlyで綺麗な棒グラフを作成
+                    fig = go.Figure(data=[
+                        go.Bar(
+                            x=div_df['Year'],
+                            y=div_df['Dividends'],
+                            marker_color='#2ca02c',
+                            text=div_df['Dividends'].round(2),
+                            textposition='auto',
+                        )
+                    ])
+                    fig.update_layout(
+                        title=f"{name} の年間1株配当推移",
+                        xaxis_title="年",
+                        yaxis_title="配当金 (円)",
+                        template="plotly_white",
+                        height=400
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("配当履歴データが見つかりませんでした。")
+            except Exception as e:
+                st.warning(lict := f"配当グラフの生成中にエラーが発生しました: {e}")
+
+            st.markdown("---")
             st.subheader("📋 8ステップ詳細判定")
 
             if div_yield >= 2.5:
@@ -95,7 +133,7 @@ with tab1:
 # ==========================================
 with tab2:
     st.subheader("📋 時価総額・財務データの一覧とグラフ比較")
-    st.caption("「みんかぶの時価総額ランキング」や「IR BANK」のように、主要銘柄の規模感や配当利回りを一目で比較できます。")
+    st.caption("主要銘柄の規模感や配当利回りを比較できます。")
 
     if st.button("🔄 データを一括取得・分析する", type="primary"):
         with st.spinner("全銘柄のデータを取得・計算中..."):
@@ -108,7 +146,7 @@ with tab2:
                     r_div = inf.get('dividendYield') or 0
                     d_y = r_div if r_div > 1 else r_div * 100
                     p_b = inf.get('priceToBook') or 0
-                    m_cap = inf.get('marketCap', 0) / 100000000  # 億円単位に変換
+                    m_cap = inf.get('marketCap', 0) / 100000000
                     
                     table_data.append({
                         "コード": code,
@@ -116,7 +154,8 @@ with tab2:
                         "時価総額(億円)": round(m_cap, 1),
                         "現在株価(円)": round(p, 1),
                         "配当利回り(%)": round(d_y, 2),
-                        "PBR(倍)": round(p_b, 2)
+                        "PBR(倍)": round(p_b, 2),
+                        "みんかぶURL": f"https://minkabu.jp/stock/{code}"
                     })
                 except Exception:
                     pass
@@ -129,7 +168,6 @@ with tab2:
         df = st.session_state['stock_df']
         
         st.markdown("### 📊 視覚的ビジュアル比較（グラフ）")
-        
         g_col1, g_col2 = st.columns(2)
         
         with g_col1:
@@ -143,6 +181,12 @@ with tab2:
             st.bar_chart(chart_mcap)
 
         st.markdown("---")
-        st.markdown("### 📋 詳細データ一覧表")
-        st.dataframe(df.sort_values(by="時価総額(億円)", ascending=False), use_container_width=True)
+        st.markdown("### 📋 詳細データ一覧表（みんかぶリンク付き）")
+        st.dataframe(
+            df.sort_values(by="時価総額(億円)", ascending=False),
+            column_config={
+                "みんかぶURL": st.column_config.LinkColumn("みんかぶリンク", display_text="ページを開く")
+            },
+            use_container_width=True
+        )
         st.success("✨ 一覧データおよびグラフの生成が完了しました！")

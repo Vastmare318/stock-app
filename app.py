@@ -231,6 +231,30 @@ with tab1:
                         else:
                             st.warning("⚠️ この銘柄の公式原文データは個別登録外です。IR BANK等をご確認ください。")
 
+                        st.markdown("---")
+                        st.write("### 📋 8ステップ詳細判定結果")
+
+                        steps = [
+                            ("1. 配当利回り", f"🟢 {yield_pct:.2f}% (合格: 3.5%以上)" if yield_pct >= 3.5 else (f"🟡 {yield_pct:.2f}% (目安)" if yield_pct >= 2.5 else f"🔴 {yield_pct:.2f}% (基準未満)"), yield_pct >= 2.5),
+                            ("2. 配当性向", f"🟢 {payout_pct:.1f}% (健全)" if payout_pct <= 50 else (f"🟡 {payout_pct:.1f}% (やや高め)" if payout_pct <= 70 else f"🔴 {payout_pct:.1f}% (過大)"), payout_pct <= 70),
+                            ("3. 時価総額", f"🟢 {market_cap:,.0f}億円 (大型)" if market_cap >= 1000 else (f"🟡 {market_cap:,.0f}億円 (中型)" if market_cap >= 300 else f"🔴 {market_cap:,.0f}億円 (小型)"), market_cap >= 300),
+                            ("4. PER (割安度)", f"🟢 {per:.1f}倍 (割安)" if per <= 15 else f"🔴 {per:.1f}倍 (割高傾向)", per <= 15),
+                            ("5. PBR (解散価値)", f"🟢 {pbr:.2f}倍 (割安)" if pbr <= 1.2 else f"🔴 {pbr:.2f}倍 (割高傾向)", pbr <= 1.2),
+                            ("6. ROE (稼ぐ力)", f"🟢 {roe_pct:.1f}% (高効率)" if roe_pct >= 8.0 else f"🔴 {roe_pct:.1f}% (基準未満)", roe_pct >= 8.0),
+                            ("7. 営業利益率", f"🟢 {profit_pct:.1f}% (高収益)" if profit_pct >= 10.0 else f"🔴 {profit_pct:.1f}% (基準未満)", profit_pct >= 10.0),
+                            ("8. 財務健全性", f"🟢 健全" if equity_ratio <= 100 else f"🔴 負債多め", equity_ratio <= 100)
+                        ]
+
+                        passed_count = sum(1 for _, _, is_pass in steps if is_pass)
+                        for title, desc, is_pass in steps:
+                            if is_pass:
+                                st.success(f"**{title}**: {desc}")
+                            else:
+                                st.info(f"**{title}**: {desc}")
+
+                        st.progress(passed_count / 8.0)
+                        st.write(f"クリアスコア: **{passed_count} / 8 項目**")
+
                 except Exception as e:
                     st.error(f"データ解析中にエラーが発生しました: {e}")
 
@@ -303,7 +327,7 @@ with tab3:
 
     if st.button("🚀 おすすめ銘柄を自動スキャンする", type="primary", key="tab3_btn"):
         scanned_results = []
-        for code in recommend_pool[:10]: # デモ用に上位10件
+        for code in recommend_pool[:10]:
             master = MASTER_STOCK_INFO.get(code, {})
             try:
                 stock = yf.Ticker(f"{code}.T")

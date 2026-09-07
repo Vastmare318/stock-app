@@ -129,7 +129,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # ==========================================
 with tab1:
     st.subheader("個別銘柄 8ステップ詳細診断 ＆ 累進配当・原文チェック")
-    st.write("「リストから選択」または「直接コード入力」のどちらか一方をご利用いただけます。")
+    st.write("①リストから選択するか、②直接コード入力をするか、どちらかをご利用いただけます。")
     
     def get_display_name(row):
         code = row['コード']
@@ -140,15 +140,25 @@ with tab1:
 
     stock_options = jpx_df.apply(get_display_name, axis=1).tolist()
     
+    # セッションステートで入力値を管理
+    if "input_code" not in st.session_state:
+        st.session_state["input_code"] = ""
+
     col_select, col_input = st.columns([2, 1])
     
     with col_select:
-        selected_option = st.selectbox("① リストから銘柄を選択", stock_options, key="tab1_select")
+        # リストが変更されたら、直接入力側の値をクリアするコールバック
+        def on_select_change():
+            st.session_state["input_code"] = ""
+
+        selected_option = st.selectbox("① リストから銘柄を選択", stock_options, key="tab1_select", on_change=on_select_change)
         list_code = selected_option.split(" - ")[0]
 
     with col_input:
-        ticker_code = st.text_input("② または直接コード入力（4桁）", value=list_code, key="tab1_input")
+        # 直接入力されたら、そちらを優先する
+        ticker_code = st.text_input("② または直接コード入力（4桁）", key="input_code")
 
+    # どちらが使われているかでターゲットコードを決定
     target_code = ticker_code.strip() if ticker_code.strip() else list_code
 
     st.markdown("### 📌 【公式IR・中計・株主還元ページの確認】")
@@ -178,7 +188,7 @@ with tab1:
                     current_price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose")
                     
                     if not current_price:
-                        st.error(f"⚠️ 銘柄コード `{target_code}` ({jpx_name}) の株価データが取得できませんでした。上の「みんかぶ」や「IR BANK」のリンクから直接公式情報をご確認ください。")
+                        st.error(f"⚠️ 銘柄コード `{target_code}` ({jpx_name}) の株価データが取得できませんでした。上のリンクから公式情報をご確認ください。")
                     else:
                         raw_yield = info.get("dividendYield")
                         dividends = stock.dividends

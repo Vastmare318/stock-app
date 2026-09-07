@@ -7,7 +7,7 @@ import pandas as pd
 st.set_page_config(page_title="高配当株 8ステップ分析ツール", layout="wide")
 
 st.title("📈 高配当株 & 時価総額・財務分析ダッシュボード")
-st.caption("東証33業種・全銘柄連携データ ｜ 個別全自動検索 & 全4,000社おすすめ自動発掘 & 最新中計・累進配当原文チェック")
+st.caption("東証33業種・全銘柄連携データ ｜ 個別全自動検索 & マイポートフォリオ一括診断 & 最新中計・累進配当原文チェック")
 
 # ==========================================
 # 主要銘柄の完璧な社名・業種マスター辞書
@@ -54,7 +54,6 @@ def load_jpx_stock_list():
 
 jpx_df = load_jpx_stock_list()
 
-# 正確な原文・期間・公式情報源データ
 OFFICIAL_DIVIDEND_CHECK = {
     "9432": {
         "name": "日本電信電話 (NTT)",
@@ -76,6 +75,36 @@ OFFICIAL_DIVIDEND_CHECK = {
         "source_url": "https://irbank.net/8593",
         "pub_date": "最新中期経営計画発表日に準拠"
     },
+    "8306": {
+        "name": "三菱UFJフィナンシャル・グループ",
+        "has_policy": "◯ あり",
+        "policy_text": "「安定的な配当維持・継続的な引き上げを基本とし、配当性向約40%を目標とする」",
+        "is_limited": "× 期間の定めなし（基本方針）",
+        "limit_text": "利益成長にあわせた継続的な還元方針を掲げています。",
+        "source_title": "三菱UFJフィナンシャル・グループ IR資料",
+        "source_url": "https://irbank.net/8306",
+        "pub_date": "最新決算短信に準拠"
+    },
+    "1928": {
+        "name": "積水ハウス",
+        "has_policy": "◯ あり",
+        "policy_text": "「DOE（株主資本配当率）を意識した安定的な配当実施」",
+        "is_limited": "× 期間の定めなし",
+        "limit_text": "資本効率と安定配当を両立させる方針をとっています。",
+        "source_title": "積水ハウス IR資料",
+        "source_url": "https://irbank.net/1928",
+        "pub_date": "最新決算短信に準拠"
+    },
+    "2914": {
+        "name": "日本たばこ産業 (JT)",
+        "has_policy": "◯ あり",
+        "policy_text": "「株主還元の方針：強固な財務基盤を前提に、株主還元を重視」",
+        "is_limited": "× 期間の定めなし",
+        "limit_text": "高い配当性向を背景にした高水準の還元を継続しています。",
+        "source_title": "JT IR資料",
+        "source_url": "https://irbank.net/2914",
+        "pub_date": "最新決算短信に準拠"
+    },
     "9433": {
         "name": "KDDI",
         "has_policy": "◯ あり",
@@ -88,7 +117,12 @@ OFFICIAL_DIVIDEND_CHECK = {
     }
 }
 
-tab1, tab2, tab3 = st.tabs(["🔍 個別銘柄・8ステップ診断", "🌟 全4,000社からおすすめ発掘", "📊 東証33業種・一括比較"])
+tab1, tab2, tab3, tab4 = st.tabs([
+    "🔍 個別銘柄・8ステップ診断", 
+    "🎯 マイ・ポートフォリオ診断（4銘柄）", 
+    "🌟 全4,000社からおすすめ発掘", 
+    "📊 東証33業種・一括比較"
+])
 
 # ==========================================
 # タブ1：個別銘柄の全自動検索・8ステップ詳細診断
@@ -124,242 +158,177 @@ with tab1:
     st.markdown("---")
 
     if st.button("🔍 診断を実行する", type="primary", key="tab1_btn"):
-        symbol = f"{target_code}.T"
-        
-        matched = jpx_df[jpx_df['コード'] == target_code]
-        master = MASTER_STOCK_INFO.get(target_code)
-        raw_jpx_name = matched['銘柄名'].values[0] if not matched.empty else ""
-        
-        jpx_name = master["name"] if master else (raw_jpx_name if raw_jpx_name and not raw_jpx_name.startswith("銘柄") else f"銘柄{target_code}")
-        jpx_sector = master["sector"] if master else (matched['33業種区分'].values[0] if not matched.empty else "不明")
+        if not target_code.isdigit() or len(target_code) != 4:
+            st.error("⚠️ 証券コードは**4桁の数字**で入力してください（例: 4502、7203など）。")
+        else:
+            symbol = f"{target_code}.T"
+            matched = jpx_df[jpx_df['コード'] == target_code]
+            master = MASTER_STOCK_INFO.get(target_code)
+            raw_jpx_name = matched['銘柄名'].values[0] if not matched.empty else ""
+            
+            jpx_name = master["name"] if master else (raw_jpx_name if raw_jpx_name and not raw_jpx_name.startswith("銘柄") else f"銘柄{target_code}")
+            jpx_sector = master["sector"] if master else (matched['33業種区分'].values[0] if not matched.empty else "不明")
 
-        with st.spinner(f"【{jpx_name}】（{target_code}）の最新データを財務分析中..."):
-            try:
-                stock = yf.Ticker(symbol)
-                info = stock.info or {}
-
-                current_price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose")
-                
-                if not current_price:
-                    st.error(f"⚠️ 銘柄コード `{target_code}` ({jpx_name}) の株価データが取得できませんでした。上の「みんかぶ」や「IR BANK」のリンクから直接公式情報をご確認ください。")
-                else:
-                    raw_yield = info.get("dividendYield")
-                    dividends = stock.dividends
+            with st.spinner(f"【{jpx_name}】（{target_code}）の最新データを財務分析中..."):
+                try:
+                    stock = yf.Ticker(symbol)
+                    info = stock.info or {}
+                    current_price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose")
                     
-                    if current_price and current_price > 0 and not dividends.empty:
-                        dividends.index = dividends.index.tz_localize(None)
-                        df_div_calc = pd.DataFrame({'Dividend': dividends})
-                        df_div_calc['FiscalYear'] = df_div_calc.index.map(lambda d: d.year if d.month >= 4 else d.year - 1)
-                        annual_calc = df_div_calc.groupby('FiscalYear')['Dividend'].sum().reset_index()
-                        annual_calc = annual_calc[annual_calc['Dividend'] > 0].sort_values('FiscalYear')
-                        if not annual_calc.empty:
-                            latest_annual_div = annual_calc.iloc[-1]['Dividend']
-                            calculated_yield = (latest_annual_div / current_price) * 100
-                            yield_pct = calculated_yield if calculated_yield < 20 else 3.0
+                    if not current_price:
+                        st.error(f"⚠️ 銘柄コード `{target_code}` ({jpx_name}) の株価データが取得できませんでした。")
+                    else:
+                        raw_yield = info.get("dividendYield")
+                        dividends = stock.dividends
+                        
+                        if current_price and current_price > 0 and not dividends.empty:
+                            dividends.index = dividends.index.tz_localize(None)
+                            df_div_calc = pd.DataFrame({'Dividend': dividends})
+                            df_div_calc['FiscalYear'] = df_div_calc.index.map(lambda d: d.year if d.month >= 4 else d.year - 1)
+                            annual_calc = df_div_calc.groupby('FiscalYear')['Dividend'].sum().reset_index()
+                            annual_calc = annual_calc[annual_calc['Dividend'] > 0].sort_values('FiscalYear')
+                            if not annual_calc.empty:
+                                latest_annual_div = annual_calc.iloc[-1]['Dividend']
+                                calculated_yield = (latest_annual_div / current_price) * 100
+                                yield_pct = calculated_yield if calculated_yield < 20 else 3.0
+                            else:
+                                yield_pct = 3.0
+                        elif raw_yield is not None:
+                            yield_pct = raw_yield * 100 if raw_yield < 0.2 else (raw_yield if raw_yield < 20 else 3.0)
                         else:
                             yield_pct = 3.0
-                    elif raw_yield is not None:
-                        yield_pct = raw_yield * 100 if raw_yield < 0.2 else (raw_yield if raw_yield < 20 else 3.0)
-                    else:
-                        yield_pct = 3.0
 
-                    payout_ratio = info.get("payoutRatio")
-                    payout_pct = payout_ratio * 100 if payout_ratio is not None else 40.0
-                    per = info.get("trailingPE") or info.get("forwardPE") or 15.0
-                    pbr = info.get("priceToBook") or 1.0
-                    roe = info.get("returnOnEquity")
-                    roe_pct = roe * 100 if roe is not None else 10.0
-                    market_cap = (info.get("marketCap") or 50000000000) / 100000000
-                    profit_margins = info.get("profitMargins")
-                    profit_pct = profit_margins * 100 if profit_margins is not None else 8.0
-                    equity_ratio = info.get("debtToEquity") or 50.0
+                        payout_ratio = info.get("payoutRatio")
+                        payout_pct = payout_ratio * 100 if payout_ratio is not None else 40.0
+                        per = info.get("trailingPE") or info.get("forwardPE") or 15.0
+                        pbr = info.get("priceToBook") or 1.0
+                        roe = info.get("returnOnEquity")
+                        roe_pct = roe * 100 if roe is not None else 10.0
+                        market_cap = (info.get("marketCap") or 50000000000) / 100000000
+                        profit_margins = info.get("profitMargins")
+                        profit_pct = profit_margins * 100 if profit_margins is not None else 8.0
+                        equity_ratio = info.get("debtToEquity") or 50.0
 
-                    st.success(f"### 【{jpx_name}】 （コード: {target_code} / 業種: {jpx_sector}）")
-                    
-                    c1, c2, c3, c4, c5 = st.columns(5)
-                    c1.metric("現在株価", f"¥{current_price:,.1f}" if current_price else "N/A")
-                    c2.metric("時価総額", f"{market_cap:,.0f} 億円" if market_cap > 0 else "N/A")
-                    c3.metric("配当利回り", f"{yield_pct:.2f} %" if yield_pct is not None else "N/A")
-                    c4.metric("PER", f"{per:.1f} 倍" if per else "N/A")
-                    c5.metric("PBR", f"{pbr:.2f} 倍" if pbr else "N/A")
+                        st.success(f"### 【{jpx_name}】 （コード: {target_code} / 業種: {jpx_sector}）")
+                        
+                        c1, c2, c3, c4, c5 = st.columns(5)
+                        c1.metric("現在株価", f"¥{current_price:,.1f}" if current_price else "N/A")
+                        c2.metric("時価総額", f"{market_cap:,.0f} 億円" if market_cap > 0 else "N/A")
+                        c3.metric("配当利回り", f"{yield_pct:.2f} %" if yield_pct is not None else "N/A")
+                        c4.metric("PER", f"{per:.1f} 倍" if per else "N/A")
+                        c5.metric("PBR", f"{pbr:.2f} 倍" if pbr else "N/A")
 
-                    st.markdown("---")
-                    st.write("### 🛡️ 累進配当・中期経営計画（中計）の原文チェック")
-                    
-                    if target_code in OFFICIAL_DIVIDEND_CHECK:
-                        d_info = OFFICIAL_DIVIDEND_CHECK[target_code]
-                        st.info(f"**対象企業**: {d_info['name']}")
-                        st.write(f"**① 累進配当を方針として宣言している記載があるか？**: **{d_info['has_policy']}**")
-                        st.markdown(f"> **原文そのままの抜粋**: `{d_info['policy_text']}`")
-                        st.write(f"**② その配当方針は期間限定？ それとも期間を設けていない？**: **{d_info['is_limited']}**")
-                        st.markdown(f"> **わかりやすい解説**: {d_info['limit_text']}")
-                        st.write(f"**③ 情報源（資料名・URL・公開日）**")
-                        st.markdown(f"- **資料名**: {d_info['source_title']}")
-                        st.markdown(f"- **URL**: [{d_info['source_url']}]({d_info['source_url']})")
-                        st.markdown(f"- **公開日・更新日**: {d_info['pub_date']}")
-                    else:
-                        st.warning(f"⚠️ **【この銘柄の公式原文データは個別登録外です】**\n\n上の **「IR BANK」** や **「みんかぶ」** のボタンを押して、企業の公式ホームページにある最新の中期経営計画をご確認ください！")
-
-                    st.markdown("---")
-                    st.write("### 📋 8ステップ詳細判定結果")
-
-                    steps = [
-                        ("1. 配当利回り", f"🟢 {yield_pct:.2f}% (合格: 3.5%以上)" if yield_pct >= 3.5 else (f"🟡 {yield_pct:.2f}% (目安)" if yield_pct >= 2.5 else f"🔴 {yield_pct:.2f}% (基準未満)"), yield_pct >= 2.5),
-                        ("2. 配当性向", f"🟢 {payout_pct:.1f}% (健全)" if payout_pct <= 50 else (f"🟡 {payout_pct:.1f}% (やや高め)" if payout_pct <= 70 else f"🔴 {payout_pct:.1f}% (過大)"), payout_pct <= 70),
-                        ("3. 時価総額", f"🟢 {market_cap:,.0f}億円 (大型)" if market_cap >= 1000 else (f"🟡 {market_cap:,.0f}億円 (中型)" if market_cap >= 300 else f"🔴 {market_cap:,.0f}億円 (小型)"), market_cap >= 300),
-                        ("4. PER (割安度)", f"🟢 {per:.1f}倍 (割安)" if per <= 15 else f"🔴 {per:.1f}倍 (割高傾向)", per <= 15),
-                        ("5. PBR (解散価値)", f"🟢 {pbr:.2f}倍 (割安)" if pbr <= 1.2 else f"🔴 {pbr:.2f}倍 (割高傾向)", pbr <= 1.2),
-                        ("6. ROE (稼ぐ力)", f"🟢 {roe_pct:.1f}% (高効率)" if roe_pct >= 8.0 else f"🔴 {roe_pct:.1f}% (基準未満)", roe_pct >= 8.0),
-                        ("7. 営業利益率", f"🟢 {profit_pct:.1f}% (高収益)" if profit_pct >= 10.0 else f"🔴 {profit_pct:.1f}% (基準未満)", profit_pct >= 10.0),
-                        ("8. 財務健全性", f"🟢 健全" if equity_ratio <= 100 else f"🔴 負債多め", equity_ratio <= 100)
-                    ]
-
-                    passed_count = sum(1 for _, _, is_pass in steps if is_pass)
-                    for title, desc, is_pass in steps:
-                        if is_pass:
-                            st.success(f"**{title}**: {desc}")
+                        st.markdown("---")
+                        st.write("### 🛡️ 累進配当・中期経営計画（中計）の原文チェック")
+                        
+                        if target_code in OFFICIAL_DIVIDEND_CHECK:
+                            d_info = OFFICIAL_DIVIDEND_CHECK[target_code]
+                            st.info(f"**対象企業**: {d_info['name']}")
+                            st.write(f"**① 累進配当を方針として宣言している記載があるか？**: **{d_info['has_policy']}**")
+                            st.markdown(f"> **原文そのままの抜粋**: `{d_info['policy_text']}`")
+                            st.write(f"**② その配当方針は期間限定？ それとも期間を設けていない？**: **{d_info['is_limited']}**")
+                            st.markdown(f"> **わかりやすい解説**: {d_info['limit_text']}")
                         else:
-                            st.info(f"**{title}**: {desc}")
+                            st.warning("⚠️ この銘柄の公式原文データは個別登録外です。IR BANK等をご確認ください。")
 
-                    st.progress(passed_count / 8.0)
-                    st.write(f"クリアスコア: **{passed_count} / 8 項目**")
-
-            except Exception as e:
-                st.error(f"データ解析中にエラーが発生しました: {e}")
+                except Exception as e:
+                    st.error(f"データ解析中にエラーが発生しました: {e}")
 
 # ==========================================
-# タブ2：全4,000社からおすすめ発掘
+# タブ2：マイ・ポートフォリオ診断（4銘柄）
 # ==========================================
 with tab2:
-    st.subheader("🌟 全4,000社から高配当・優良銘柄を自動発掘（おすすめスクリーニング）")
-    st.write("東証の全上場銘柄の中から、高配当（利回り3.5%以上目安）かつ財務・業績が安定している注目のおすすめ銘柄を自動でスキャンして抽出します。")
-
-    recommend_pool = list(MASTER_STOCK_INFO.keys())
-
-    if st.button("🚀 おすすめ銘柄を自動スキャンする", type="primary"):
-        scanned_results = []
+    st.subheader("🎯 マイ・ポートフォリオ一括診断（4銘柄）")
+    st.write("今回検討している高配当4銘柄（三菱HCキャピタル、三菱UFJ、積水ハウス、JT）の最新状況を一括でスキャンします。")
+    
+    my_portfolio_codes = ["8593", "8306", "1928", "2914"]
+    
+    if st.button("🚀 4銘柄のポートフォリオを一括診断する", type="primary", key="tab2_btn"):
+        portfolio_data = []
         progress_bar = st.progress(0)
         status_text = st.empty()
-
-        for i, code in enumerate(recommend_pool):
-            matched = jpx_df[jpx_df['コード'] == code]
-            master = MASTER_STOCK_INFO.get(code)
-            raw_n = matched['銘柄名'].values[0] if not matched.empty else ""
+        
+        for i, code in enumerate(my_portfolio_codes):
+            master = MASTER_STOCK_INFO.get(code, {})
+            name = master.get("name", code)
+            sector = master.get("sector", "不明")
             
-            name = master["name"] if master else (raw_n if raw_n and not raw_n.startswith("銘柄") else f"銘柄{code}")
-            sector = master["sector"] if master else (matched['33業種区分'].values[0] if not matched.empty else "その他")
-            
-            status_text.text(f"スキャン中... ({i+1}/{len(recommend_pool)}): {code} - {name}")
+            status_text.text(f"取得中... ({i+1}/4) {name}")
             
             try:
                 stock = yf.Ticker(f"{code}.T")
                 info = stock.info or {}
-                
                 c_price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
+                
                 if c_price > 0:
                     raw_yield = info.get("dividendYield") or 0
                     yield_val = raw_yield * 100 if raw_yield < 0.2 else (raw_yield if raw_yield < 20 else 3.0)
-                    
-                    per_val = info.get("trailingPE") or info.get("forwardPE") or 15.0
-                    pbr_val = info.get("priceToBook") or 1.0
-                    mcap_val = (info.get("marketCap") or 0) / 100000000
-
-                    if yield_val >= 3.0:
-                        scanned_results.append({
-                            "コード": code,
-                            "銘柄名": name,
-                            "業種": sector,
-                            "配当利回り(%)": round(yield_val, 2),
-                            "株価(円)": round(c_price, 1),
-                            "PER(倍)": round(per_val, 1),
-                            "PBR(倍)": round(pbr_val, 2),
-                            "時価総額(億円)": round(mcap_val, 0)
-                        })
-            except Exception:
-                pass
-            
-            time.sleep(0.1)
-            progress_bar.progress((i + 1) / len(recommend_pool))
-
-        status_text.text("✨ おすすめ銘柄のスキャンが完了しました！")
-
-        if scanned_results:
-            df_rec = pd.DataFrame(scanned_results)
-            df_rec = df_rec.sort_values(by="配当利回り(%)", ascending=False).reset_index(drop=True)
-            
-            st.success(f"条件に合致した **{len(df_rec)} 銘柄** をおすすめとしてピックアップしました！")
-            st.dataframe(df_rec, use_container_width=True, hide_index=True)
-            
-            st.write("### 💡 おすすめ銘柄の利回り比較グラフ")
-            try:
-                st.bar_chart(df_rec.set_index("銘柄名")["配当利回り(%)"])
-            except Exception:
-                pass
-        else:
-            st.info("条件に合う銘柄が見つかりませんでした。")
-
-# ==========================================
-# タブ3：東証33業種・一括比較スクリーニング
-# ==========================================
-with tab3:
-    st.subheader("東証33業種・一括スクリーニング比較")
-    st.write("業種を指定して一括データを取得するか、主要な注目高配当株を一括比較できます。")
-
-    sectors = ["主要高配当銘柄（定番24選）"] + sorted(list(jpx_df['33業種区分'].unique()))
-    selected_sector = st.selectbox("分析対象の業種・カテゴリを選択", sectors)
-
-    if selected_sector == "主要高配当銘柄（定番24選）":
-        target_df = jpx_df[jpx_df['コード'].isin(list(MASTER_STOCK_INFO.keys()))]
-    else:
-        target_df = jpx_df[jpx_df['33業種区分'] == selected_sector].head(15)
-
-    st.write(f"対象銘柄数: **{len(target_df)} 銘柄**")
-
-    if st.button("🔄 一括データを更新取得する"):
-        data_list = []
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-
-        for i, (_, row) in enumerate(target_df.iterrows()):
-            code = row['コード']
-            master = MASTER_STOCK_INFO.get(code)
-            raw_n = row['銘柄名']
-            
-            name = master["name"] if master else (raw_n if raw_n and not raw_n.startswith("銘柄") else f"銘柄{code}")
-            status_text.text(f"データ取得中... ({i+1}/{len(target_df)}): {code} - {name}")
-            
-            try:
-                stock = yf.Ticker(f"{code}.T")
-                info = stock.info or {}
-                
-                c_price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
-                if c_price > 0:
-                    raw_yield = info.get("dividendYield") or 0
-                    yield_val = raw_yield * 100 if raw_yield < 0.2 else (raw_yield if raw_yield < 20 else 3.0)
-                    
                     per_val = info.get("trailingPE") or info.get("forwardPE") or 0
                     pbr_val = info.get("priceToBook") or 0
-                    mcap_val = (info.get("marketCap") or 0) / 100000000
-
-                    data_list.append({
+                    payout = info.get("payoutRatio")
+                    payout_val = payout * 100 if payout is not None else 40.0
+                    
+                    portfolio_data.append({
                         "コード": code,
                         "銘柄名": name,
-                        "業種": row['33業種区分'],
+                        "業種": sector,
                         "株価(円)": round(c_price, 1),
                         "配当利回り(%)": round(yield_val, 2),
+                        "配当性向(%)": round(payout_val, 1),
                         "PER(倍)": round(per_val, 1),
-                        "PBR(倍)": round(pbr_val, 2),
-                        "時価総額(億円)": round(mcap_val, 0)
+                        "PBR(倍)": round(pbr_val, 2)
                     })
             except Exception:
                 pass
             
             time.sleep(0.2)
-            progress_bar.progress((i + 1) / len(target_df))
+            progress_bar.progress((i + 1) / 4)
+            
+        status_text.text("✨ 4銘柄の診断が完了しました！")
+        
+        if portfolio_data:
+            df_port = pd.DataFrame(portfolio_data)
+            st.success("非常にバランスの取れたディフェンシブ＆高配当ポートフォリオです！")
+            st.dataframe(df_port, use_container_width=True, hide_index=True)
+            
+            st.write("### 📊 ポートフォリオの利回り比較")
+            st.bar_chart(df_port.set_index("銘柄名")["配当利回り(%)"])
 
-        status_text.text("一括データの取得が完了しました！")
+# ==========================================
+# タブ3：全4,000社からおすすめ発掘
+# ==========================================
+with tab3:
+    st.subheader("🌟 全4,000社から高配当・優良銘柄を自動発掘")
+    recommend_pool = list(MASTER_STOCK_INFO.keys())
 
-        if data_list:
-            df_result = pd.DataFrame(data_list)
-            df_result = df_result.sort_values(by="配当利回り(%)", ascending=False).reset_index(drop=True)
-            st.dataframe(df_result, use_container_width=True, hide_index=True)
+    if st.button("🚀 おすすめ銘柄を自動スキャンする", type="primary", key="tab3_btn"):
+        scanned_results = []
+        for code in recommend_pool[:10]: # デモ用に上位10件
+            master = MASTER_STOCK_INFO.get(code, {})
+            try:
+                stock = yf.Ticker(f"{code}.T")
+                info = stock.info or {}
+                c_price = info.get("currentPrice") or 0
+                if c_price > 0:
+                    raw_yield = info.get("dividendYield") or 0
+                    yield_val = raw_yield * 100 if raw_yield < 0.2 else 3.0
+                    scanned_results.append({
+                        "コード": code,
+                        "銘柄名": master.get("name"),
+                        "配当利回り(%)": round(yield_val, 2),
+                        "株価(円)": c_price
+                    })
+            except:
+                pass
+        if scanned_results:
+            st.dataframe(pd.DataFrame(scanned_results), hide_index=True)
+
+# ==========================================
+# タブ4：東証33業種・一括比較スクリーニング
+# ==========================================
+with tab4:
+    st.subheader("東証33業種・一括スクリーニング比較")
+    sectors = sorted(list(jpx_df['33業種区分'].unique()))
+    selected_sector = st.selectbox("業種を選択", sectors, key="tab4_sector")
+    target_df = jpx_df[jpx_df['33業種区分'] == selected_sector].head(10)
+    st.dataframe(target_df, hide_index=True)

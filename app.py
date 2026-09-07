@@ -1,4 +1,4 @@
-aimport streamlit as st
+import streamlit as st
 import yfinance as yf
 import time
 import pandas as pd
@@ -140,10 +140,6 @@ with tab1:
 
     stock_options = jpx_df.apply(get_display_name, axis=1).tolist()
     
-    # セッションステートの初期化
-    if "selected_ticker" not in st.session_state:
-        st.session_state["selected_ticker"] = "8593"
-
     col_select, col_input = st.columns([2, 1])
     
     with col_select:
@@ -153,8 +149,6 @@ with tab1:
     with col_input:
         ticker_code = st.text_input("② または直接コード入力（4桁）", value=list_code, key="tab1_input")
 
-    # ユーザーがどちらを操作したか判定してターゲットコードを決める
-    # テキストボックスが直接書き換えられた場合はそちらを優先、それ以外はリストに連動
     target_code = ticker_code.strip() if ticker_code.strip() else list_code
 
     st.markdown("### 📌 【公式IR・中計・株主還元ページの確認】")

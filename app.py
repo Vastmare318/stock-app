@@ -1,4 +1,4 @@
-import streamlit as st
+aimport streamlit as st
 import yfinance as yf
 import time
 import pandas as pd
@@ -129,7 +129,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # ==========================================
 with tab1:
     st.subheader("個別銘柄 8ステップ詳細診断 ＆ 累進配当・原文チェック")
-    st.write("証券コードを入力するか、一覧から銘柄を選択すると自動でデータ解析を行います。")
+    st.write("「リストから選択」または「直接コード入力」のどちらか一方をご利用いただけます。")
     
     def get_display_name(row):
         code = row['コード']
@@ -140,14 +140,22 @@ with tab1:
 
     stock_options = jpx_df.apply(get_display_name, axis=1).tolist()
     
-    col_select, col_input = st.columns([2, 1])
-    with col_select:
-        selected_option = st.selectbox("銘柄リストから選択", stock_options, index=0, key="tab1_select")
-        default_code = selected_option.split(" - ")[0]
-    with col_input:
-        ticker_code = st.text_input("直接コード入力（4桁）", value=default_code, key="tab1_input")
+    # セッションステートの初期化
+    if "selected_ticker" not in st.session_state:
+        st.session_state["selected_ticker"] = "8593"
 
-    target_code = ticker_code.strip() if ticker_code.strip() else default_code
+    col_select, col_input = st.columns([2, 1])
+    
+    with col_select:
+        selected_option = st.selectbox("① リストから銘柄を選択", stock_options, key="tab1_select")
+        list_code = selected_option.split(" - ")[0]
+
+    with col_input:
+        ticker_code = st.text_input("② または直接コード入力（4桁）", value=list_code, key="tab1_input")
+
+    # ユーザーがどちらを操作したか判定してターゲットコードを決める
+    # テキストボックスが直接書き換えられた場合はそちらを優先、それ以外はリストに連動
+    target_code = ticker_code.strip() if ticker_code.strip() else list_code
 
     st.markdown("### 📌 【公式IR・中計・株主還元ページの確認】")
     link_col1, link_col2 = st.columns(2)
@@ -159,7 +167,7 @@ with tab1:
 
     if st.button("🔍 診断を実行する", type="primary", key="tab1_btn"):
         if not target_code.isdigit() or len(target_code) != 4:
-            st.error("⚠️ 証券コードは**4桁の数字**で入力してください（例: 4502、7203など）。")
+            st.error("⚠️ 証券コードは**4桁の数字**で入力してください（例: 8593、8306など）。")
         else:
             symbol = f"{target_code}.T"
             matched = jpx_df[jpx_df['コード'] == target_code]
@@ -176,7 +184,7 @@ with tab1:
                     current_price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose")
                     
                     if not current_price:
-                        st.error(f"⚠️ 銘柄コード `{target_code}` ({jpx_name}) の株価データが取得できませんでした。")
+                        st.error(f"⚠️ 銘柄コード `{target_code}` ({jpx_name}) の株価データが取得できませんでした。上の「みんかぶ」や「IR BANK」のリンクから直接公式情報をご確認ください。")
                     else:
                         raw_yield = info.get("dividendYield")
                         dividends = stock.dividends

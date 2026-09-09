@@ -4,15 +4,16 @@ import time
 import pandas as pd
 
 # ページ基本設定
-st.set_page_config(page_title="高配当株 8ステップ分析ツール", layout="wide")
+st.set_page_config(page_title="高配当株 & グロース株 分析ツール", layout="wide")
 
-st.title("📈 高配当株 & 時価総額・財務分析ダッシュボード")
-st.caption("東証33業種・全銘柄連携データ ｜ 個別全自動検索 & マイポートフォリオ一括診断 & 最新中計・累進配当原文チェック")
+st.title("📈 高配当株 ＆ グロース株（別枠投資）分析ダッシュボード")
+st.caption("東証33業種・全銘柄連携データ ｜ 高配当枠 ＆ 6166など別枠グロース株の個別管理")
 
 # ==========================================
-# 主要銘柄の完璧な社名・業種マスター辞書
+# 主要銘柄のマスター辞書（6166の中村超硬を追加）
 # ==========================================
 MASTER_STOCK_INFO = {
+    "6166": {"name": "中村超硬", "sector": "機械"},
     "9432": {"name": "日本電信電話 (NTT)", "sector": "情報・通信業"},
     "8306": {"name": "三菱ＵＦＪフィナンシャル・グループ", "sector": "銀行業"},
     "8316": {"name": "三井住友フィナンシャルグループ", "sector": "銀行業"},
@@ -108,12 +109,12 @@ OFFICIAL_DIVIDEND_CHECK = {
     "9433": {
         "name": "KDDI",
         "has_policy": "◯ あり",
-        "policy_text": "「持続的な増配を継続する、『利益成長に伴う配当金の一株当たり配当金の継続的な増加』をめざす」",
-        "is_limited": "× 期間の定めなし（持続的方針）",
-        "limit_text": "具体的な年数で区切るのではなく、利益成長にあわせた持続的な増配を志向しています。",
-        "source_title": "KDDI サステナビリティ・IR資料 / IR BANK",
+        "policy_text": "🔥「持続的な増配を継続する...」",
+        "is_limited": "× 期間の定めなし",
+        "limit_text": "持続的な増配を志向しています。",
+        "source_title": "KDDI IR資料",
         "source_url": "https://irbank.net/9433",
-        "pub_date": "最新統合報告書・決算説明会資料に準拠"
+        "pub_date": "最新決算短信に準拠"
     }
 }
 
@@ -122,7 +123,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🎯 マイ・ポートフォリオ診断（4銘柄）", 
     "🌟 全4,000社からおすすめ発掘", 
     "📊 東証33業種・一括比較",
-    "🚨 要注意・手放すべき株の特徴"
+    "🚀 【別枠】6166等グロース株・特設診断"
 ])
 
 # ==========================================
@@ -185,7 +186,7 @@ with tab1:
                     current_price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose")
                     
                     if not current_price:
-                        st.error(f"⚠️ 銘柄コード `{target_code}` ({jpx_name}) の株価データが取得できませんでした。上のリンクから公式情報をご確認ください。")
+                        st.error(f"⚠️ 銘柄コード `{target_code}` ({jpx_name}) の株価データが取得できませんでした。")
                     else:
                         raw_yield = info.get("dividendYield")
                         dividends = stock.dividends
@@ -278,6 +279,7 @@ with tab2:
     
     if st.button("🚀 4銘柄のポートフォリオを一括診断する", type="primary", key="tab2_btn"):
         portfolio_data = []
+        alert_messages = []
         progress_bar = st.progress(0)
         status_text = st.empty()
         
@@ -311,6 +313,24 @@ with tab2:
                         "PER(倍)": round(per_val, 1),
                         "PBR(倍)": round(pbr_val, 2)
                     })
+
+                    warnings = []
+                    if payout_val > 80:
+                        warnings.append(
+                            f"⚠️ **【危険】配当性向が {payout_val:.1f}% です！**\n"
+                            f"   👉 *小学生にたとえると...* 稼いだお小遣いをほぼ全額つかいきっちゃっていて、ピンチのときにお金が残らない危ない状態です。突然のお小遣いカット（減配）に気をつけて！"
+                        )
+                    if per_val > 25:
+                        warnings.append(
+                            f"⚠️ **【割高】PERが {per_val:.1f}倍 と高すぎます！**\n"
+                            f"   👉 *小学生にたとえると...* 本当は100円の価値しかないおもちゃに、みんなが飛びついて300円も払っているようなもの。あとでブームが去ると大損しちゃうかも！"
+                        )
+                    
+                    if warnings:
+                        alert_messages.append(f"🔴 **【要注意】{name}（{code}）**\n" + "\n".join(warnings))
+                    else:
+                        alert_messages.append(f"🟢 **【安心】{name}（{code}）**：いまのところ、すぐに手放すような大きな危険サインはありません！")
+
             except Exception:
                 pass
             
@@ -327,12 +347,20 @@ with tab2:
             st.write("### 📊 ポートフォリオの利回り比較")
             st.bar_chart(df_port.set_index("銘柄名")["配当利回り(%)"])
 
+            st.markdown("---")
+            st.markdown("### 🚨 【もし違う株を買っちゃったとき用】すぐに手放した方がいい？要注意アラート欄")
+            for alert in alert_messages:
+                if "【要注意】" in alert:
+                    st.warning(alert)
+                else:
+                    st.info(alert)
+
 # ==========================================
 # タブ3：全4,000社からおすすめ発掘
 # ==========================================
 with tab3:
     st.subheader("🌟 全4,000社から高配当・優良銘柄を自動発掘")
-    recommend_pool = list(MASTER_STOCK_INFO.keys())
+    recommend_pool = [k for k in MASTER_STOCK_INFO.keys() if k != "6166"]
 
     if st.button("🚀 おすすめ銘柄を自動スキャンする", type="primary", key="tab3_btn"):
         scanned_results = []
@@ -362,33 +390,77 @@ with tab3:
 with tab4:
     st.subheader("東証33業種・一括スクリーニング比較")
     sectors = sorted(list(jpx_df['33業種区分'].unique()))
-    selected_sector = st.selectbox("業種を選択", sectors, key="tab4_sector")
+    selected_sector = st.selectbox("業種の種類を選択", sectors, key="tab4_sector")
     target_df = jpx_df[jpx_df['33業種区分'] == selected_sector].head(10)
     st.dataframe(target_df, hide_index=True)
 
 # ==========================================
-# タブ5：🚨 要注意・手放すべき株の特徴（追加）
+# タブ5：【別枠】6166等グロース株・特設診断
 # ==========================================
 with tab5:
-    st.subheader("🚨 今すぐ手放したほうがいいかもしれない「要注意な株」の特徴")
-    st.markdown("""
-    株式市場にある約4,000の銘柄の中には、もしうっかり買ってしまったら**「今すぐにでも手放したほうがいい（売ったほうがいい）」**という危険なサインを出している会社があります。  
-    ここでは、なぜそんな危ない株を今すぐ手放したほうがいいのか、わかりやすい3つの理由で解説します。
-    """)
+    st.subheader("🚀 【別枠投資】中村超硬（6166）などグロース株・特設チェック枠")
+    st.write("高配当の安定枠とは完全に分けて、値上がり益（キャピタルゲイン）や話題性を狙う別枠の株をチェックします。")
+    
+    growth_code = st.text_input("チェックしたい別枠の証券コードを入力（例: 6166）", value="6166", key="growth_input")
+    
+    if st.button("🚀 別枠グロース株の診断を実行する", type="primary", key="growth_btn"):
+        if not growth_code.isdigit() or len(growth_code) != 4:
+            st.error("⚠️ 4桁の証券コードを入力してください。")
+        else:
+            g_symbol = f"{growth_code}.T"
+            g_master = MASTER_STOCK_INFO.get(growth_code, {})
+            g_name = g_master.get("name", f"銘柄{growth_code}")
+            
+            with st.spinner(f"【{g_name}】（{growth_code}）のグロース株データを解析中..."):
+                try:
+                    g_stock = yf.Ticker(g_symbol)
+                    g_info = g_stock.info or {}
+                    g_price = g_info.get("currentPrice") or g_info.get("regularMarketPrice") or g_info.get("previousClose")
+                    
+                    if not g_price:
+                        st.error(f"⚠️ コード `{growth_code}` ({g_name}) の株価データが取得できませんでした。")
+                    else:
+                        g_mcap = (g_info.get("marketCap") or 5000000000) / 100000000
+                        g_per = g_info.get("trailingPE") or g_info.get("forwardPE") or 0
+                        g_pbr = g_info.get("priceToBook") or 1.0
+                        g_volume = g_info.get("volume") or 0
+                        
+                        st.success(f"### 🎯 【別枠分析】 {g_name} （コード: {growth_code}）")
+                        
+                        gc1, gc2, gc3, gc4 = st.columns(4)
+                        gc1.metric("現在株価", f"¥{g_price:,.1f}")
+                        gc2.metric("時価総額", f"{g_mcap:,.1f} 億円")
+                        gc3.metric("PER（利益倍率）", f"{g_per:.1f} 倍" if g_per > 0 else "赤字または計測中")
+                        gc4.metric("PBR（解散価値）", f"{g_pbr:.2f} 倍")
+                        
+                        st.markdown("---")
+                        st.markdown("### 🚦 グロース株（別枠）の要注意チェック＆小学生向け解説")
+                        
+                        growth_warnings = []
+                        
+                        # グロース株特有の判定
+                        if g_mcap < 100:
+                            growth_warnings.append(
+                                f"⚠️ **【超小型株リスク】時価総額が {g_mcap:.1f}億円 と非常に小さいです！**\n"
+                                f"   👉 *小学生にたとえると...* クラス全員くらいの小さなグループみたいなもの。少しのお金で株価がロケットみたいに急上昇することもあれば、一瞬で奈落の底に落ちるくらい値動きが激しいので、お小遣いのほんの少しだけで遊ぶようにしてね！"
+                            )
+                        
+                        if g_per == 0 or g_per < 0:
+                            growth_warnings.append(
+                                f"⚠️ **【赤字・無配リスク】現在、会社が利益を出せていない（または無配）状態です！**\n"
+                                f"   👉 *小学生にたとえると...* 今はお手伝いしても赤字続きでお小遣い（配当）がもらえない状態。未来のアイデアや大爆発する期待感だけでみんなが買っているから、期待が外れたときのダメージに気をつけて！"
+                            )
+                        elif g_per > 50:
+                            growth_warnings.append(
+                                f"⚠️ **【期待値が高すぎ】PERが {g_per:.1f}倍 と大変なことになっています！**\n"
+                                f"   👉 *小学生にたとえると...* 「将来すごーい天才になるはず！」という未来の期待だけで、いまの値段がめちゃくちゃ高くなっている状態。少しでも「あれ？」と思うと一気にみんなが逃げ出しちゃうから注意！"
+                            )
 
-    st.markdown("---")
-
-    st.markdown("### ① お金を生み出すパワーが完全になくなっている会社（ゾンビみたいになっちゃう株）")
-    st.write("会社はお仕事をして、みんなからお金をもらって利益（もうけ）を出しています。でも、ライバルに負けたりして商品が全く売れなくなると、もうけがなくなってしまいます。")
-    st.info("**なぜ今すぐ手放したほうがいいの？**\n\nもうけが出ないと、会社は大きくなれないし、みんなが大好きな「配当金（株を持っていることでもらえるお小遣い）」ももらえなくなっちゃいます。それどころか、会社の価値がどんどん下がって、自分の投資したお金がみるみる減ってしまうため、これ以上被害が大きくならないうちに手放すのが正解です。")
-
-    st.markdown("### ② 借金で首が回らなくなっている会社（お小遣い帳がピンチの株）")
-    st.write("会社を大きくするためやビジネスを続けるために、銀行などからたくさんお金を借りている会社があります。")
-    st.info("**なぜ今すぐ手放したほうがいいの？**\n\n世の中の仕組みが変わって、お金を借りるときのレンタル料（金利）が上がったりすると、毎月の借金の返済だけで会社のお金がなくなってしまいます。最悪の場合、会社が倒産（おしまいになってしまうこと）して、**持っている株がただの紙切れになり、お金が1円も戻ってこなくなる**ため、一刻も早く手放したほうが安全です。")
-
-    st.markdown("### ③ 悪いニュースや厳しいルールで大ピンチが来る会社")
-    st.write("国の法律が変わったり、世の中のルールがすごく厳しくなったりして、今まで通りのビジネスができなくなることがあります。")
-    st.info("**なぜ今すぐ手放したほうがいいの？**\n\nルールが変わったせいで、急にお客さんがいなくなったり、売上がガタ落ちしたりします。あっという間に株の値段が下がってしまうので、「やばいことになりそう」と気づいた瞬間に逃げないと、大損をしてしまうからです。")
-
-    st.markdown("---")
-    st.success("**💡 まとめ**\n\n株を買うときは、**「この会社はこれからもずっとみんなに必要とされるかな？」「お小遣い（もうけ）をしっかり稼ぎ続けられるかな？」**というのを考えることが一番大切です。もし持っている株がこの「危ないサイン」に当てはまっていたら、勇気を出して今すぐ手放す（損切りや利確をする）ことを考えましょう！")
+                        if growth_warnings:
+                            for gw in growth_warnings:
+                                st.warning(gw)
+                        else:
+                            st.info(f"🟢 **【別枠チェック良好】** {g_name} は極端な危険サインは出ていませんが、グロース株は値動きが激しいため、高配当の安全枠とはしっかりお財布を分けてハラハラを楽しんでください！")
+                            
+                except Exception as e:
+                    st.error(f"データ取得中にエラーが発生しました: {e}")

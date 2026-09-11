@@ -7,10 +7,10 @@ import pandas as pd
 st.set_page_config(page_title="高配当株 & グロース株 分析ツール", layout="wide")
 
 st.title("📈 高配当株 ＆ グロース株（別枠投資）分析ダッシュボード")
-st.caption("東証33業種・全銘柄連携データ ｜ 高配当枠 ＆ 6166など別枠グロース株の個別管理")
+st.caption("東証33業種・全銘柄連携データ ｜ 買い時判定機能追加 ｜ 高配当枠 ＆ グロース株の個別管理")
 
 # ==========================================
-# 主要銘柄のマスター辞書（6166の中村超硬を追加）
+# 主要銘柄のマスター辞書
 # ==========================================
 MASTER_STOCK_INFO = {
     "6166": {"name": "中村超硬", "sector": "機械"},
@@ -62,9 +62,6 @@ OFFICIAL_DIVIDEND_CHECK = {
         "policy_text": "「株主還元の充実：継続的な配当維持・増配を基本方針とし...」",
         "is_limited": "× 期間の定めなし（基本方針として継続）",
         "limit_text": "特定の何年間という区切りはなく、会社の基本的な還元姿勢として掲げられています。",
-        "source_title": "NTT 公式IR・中期経営戦略資料 / IR BANK",
-        "source_url": "https://irbank.net/9432",
-        "pub_date": "最新中期経営計画・決算短信に準拠"
     },
     "8593": {
         "name": "三菱HCキャピタル",
@@ -72,9 +69,6 @@ OFFICIAL_DIVIDEND_CHECK = {
         "policy_text": "「中計期間中の株主還元：累進配当の継続を基本とする」",
         "is_limited": "△ 期間あり（中期経営計画の期間に連動）",
         "limit_text": "「中計期間中」という条件がついており、次期中計で方針が見直される可能性があります。",
-        "source_title": "三菱HCキャピタル 中期経営計画資料 / IR BANK",
-        "source_url": "https://irbank.net/8593",
-        "pub_date": "最新中期経営計画発表日に準拠"
     },
     "8306": {
         "name": "三菱UFJフィナンシャル・グループ",
@@ -82,9 +76,6 @@ OFFICIAL_DIVIDEND_CHECK = {
         "policy_text": "「安定的な配当維持・継続的な引き上げを基本とし、配当性向約40%を目標とする」",
         "is_limited": "× 期間の定めなし（基本方針）",
         "limit_text": "利益成長にあわせた継続的な還元方針を掲げています。",
-        "source_title": "三菱UFJフィナンシャル・グループ IR資料",
-        "source_url": "https://irbank.net/8306",
-        "pub_date": "最新決算短信に準拠"
     },
     "1928": {
         "name": "積水ハウス",
@@ -92,9 +83,6 @@ OFFICIAL_DIVIDEND_CHECK = {
         "policy_text": "「DOE（株主資本配当率）を意識した安定的な配当実施」",
         "is_limited": "× 期間の定めなし",
         "limit_text": "資本効率と安定配当を両立させる方針をとっています。",
-        "source_title": "積水ハウス IR資料",
-        "source_url": "https://irbank.net/1928",
-        "pub_date": "最新決算短信に準拠"
     },
     "2914": {
         "name": "日本たばこ産業 (JT)",
@@ -102,19 +90,13 @@ OFFICIAL_DIVIDEND_CHECK = {
         "policy_text": "「株主還元の方針：強固な財務基盤を前提に、株主還元を重視」",
         "is_limited": "× 期間の定めなし",
         "limit_text": "高い配当性向を背景にした高水準の還元を継続しています。",
-        "source_title": "JT IR資料",
-        "source_url": "https://irbank.net/2914",
-        "pub_date": "最新決算短信に準拠"
     },
     "9433": {
         "name": "KDDI",
         "has_policy": "◯ あり",
-        "policy_text": "🔥「持続的な増配を継続する...」",
+        "policy_text": "「持続的な増配を継続する、『利益成長に伴う配当金の一株当たり配当金の継続的な増加』をめざす」",
         "is_limited": "× 期間の定めなし",
-        "limit_text": "持続的な増配を志向しています。",
-        "source_title": "KDDI IR資料",
-        "source_url": "https://irbank.net/9433",
-        "pub_date": "最新決算短信に準拠"
+        "limit_text": "利益成長にあわせた持続的な増配を志向しています。",
     }
 }
 
@@ -179,7 +161,7 @@ with tab1:
             jpx_name = master["name"] if master else (raw_jpx_name if raw_jpx_name and not raw_jpx_name.startswith("銘柄") else f"銘柄{target_code}")
             jpx_sector = master["sector"] if master else (matched['33業種区分'].values[0] if not matched.empty else "不明")
 
-            with st.spinner(f"【{jpx_name}】（{target_code}）の最新データを財務分析中..."):
+            with st.spinner(f"【{jpx_name}】（{target_code}）の最新データを財務＆買い時分析中..."):
                 try:
                     stock = yf.Ticker(symbol)
                     info = stock.info or {}
@@ -188,6 +170,11 @@ with tab1:
                     if not current_price:
                         st.error(f"⚠️ 銘柄コード `{target_code}` ({jpx_name}) の株価データが取得できませんでした。")
                     else:
+                        # 過去の株価データ（半年分）を取得して移動平均線を計算（買い時判定用）
+                        hist = stock.history(period="6mo")
+                        ma75 = hist['Close'].mean() if not hist.empty else current_price
+                        price_diff_pct = ((current_price - ma75) / ma75) * 100
+
                         raw_yield = info.get("dividendYield")
                         dividends = stock.dividends
                         
@@ -222,22 +209,44 @@ with tab1:
                         st.success(f"### 【{jpx_name}】 （コード: {target_code} / 業種: {jpx_sector}）")
                         
                         c1, c2, c3, c4, c5 = st.columns(5)
-                        c1.metric("現在株価", f"¥{current_price:,.1f}" if current_price else "N/A")
-                        c2.metric("時価総額", f"{market_cap:,.0f} 億円" if market_cap > 0 else "N/A")
-                        c3.metric("配当利回り", f"{yield_pct:.2f} %" if yield_pct is not None else "N/A")
-                        c4.metric("PER", f"{per:.1f} 倍" if per else "N/A")
-                        c5.metric("PBR", f"{pbr:.2f} 倍" if pbr else "N/A")
+                        c1.metric("現在株価", f"¥{current_price:,.1f}")
+                        c2.metric("時価総額", f"{market_cap:,.0f} 億円")
+                        c3.metric("配当利回り", f"{yield_pct:.2f} %")
+                        c4.metric("PER", f"{per:.1f} 倍")
+                        c5.metric("PBR", f"{pbr:.2f} 倍")
+
+                        # 🟢【新規追加】いまが買い時？タイミング判定コーナー
+                        st.markdown("---")
+                        st.markdown("### ⏰ 【いま買っていい？】買い時タイミング判定シグナル")
+                        
+                        if price_diff_pct < -5:
+                            st.success(
+                                f"🌟 **【大チャンス！いまは買い時です！】**\n"
+                                f"   - 過去の平均価格（75日線: ¥{ma75:,.1f}）よりも、現在価格が **{abs(price_diff_pct):.1f}% 安く（お得に）** 売られています！\n"
+                                f"   - *小学生にたとえると...* いつも欲しかったおもちゃが、今だけ大セールで安くなっている状態！買うなら絶好のチャンスです。"
+                            )
+                        elif price_diff_pct > 10:
+                            st.warning(
+                                f"⚠️ **【ちょっと待って！今は高値づかみに注意】**\n"
+                                f"   - 過去の平均価格（75日線: ¥{ma75:,.1f}）よりも、現在価格が **{price_diff_pct:.1f}% 高く** なっています（少し急ピッチで値上がり中）。\n"
+                                f"   - *小学生にたとえると...* みんなが「欲しい！」と殺到して値段がつり上がっている状態。少し落ち着くのを待つか、少なめから買うのが安心！"
+                            )
+                        else:
+                            st.info(
+                                f"👍 **【ふつうのタイミング（いつでもOK）】**\n"
+                                f"   - 過去の平均価格と比べて大きな偏りがなく、いつ買ってもフェアな適正価格です。\n"
+                                f"   - *小学生にたとえると...* 定価通りの落ち着いたお値段。コツコツ積み立てるならいつ始めても大丈夫！"
+                            )
 
                         st.markdown("---")
                         st.write("### 🛡️ 累進配当・中期経営計画（中計）の原文チェック")
-                        
                         if target_code in OFFICIAL_DIVIDEND_CHECK:
                             d_info = OFFICIAL_DIVIDEND_CHECK[target_code]
                             st.info(f"**対象企業**: {d_info['name']}")
-                            st.write(f"**① 累進配当を方針として宣言している記載があるか？**: **{d_info['has_policy']}**")
-                            st.markdown(f"> **原文そのままの抜粋**: `{d_info['policy_text']}`")
-                            st.write(f"**② その配当方針は期間限定？ それとも期間を設けていない？**: **{d_info['is_limited']}**")
-                            st.markdown(f"> **わかりやすい解説**: {d_info['limit_text']}")
+                            st.write(f"**① 累進配当の宣言**: **{d_info['has_policy']}**")
+                            st.markdown(f"> **原文抜粋**: `{d_info['policy_text']}`")
+                            st.write(f"**② 期間の定め**: **{d_info['is_limited']}**")
+                            st.markdown(f"> **解説**: {d_info['limit_text']}")
                         else:
                             st.warning("⚠️ この銘柄の公式原文データは個別登録外です。IR BANK等をご確認ください。")
 
@@ -318,12 +327,12 @@ with tab2:
                     if payout_val > 80:
                         warnings.append(
                             f"⚠️ **【危険】配当性向が {payout_val:.1f}% です！**\n"
-                            f"   👉 *小学生にたとえると...* 稼いだお小遣いをほぼ全額つかいきっちゃっていて、ピンチのときにお金が残らない危ない状態です。突然のお小遣いカット（減配）に気をつけて！"
+                            f"   👉 *小学生にたとえると...* 稼いだお小遣いをほぼ全額つかいきっちゃっていて、ピンチのときにお金が残らない危ない状態です。"
                         )
                     if per_val > 25:
                         warnings.append(
                             f"⚠️ **【割高】PERが {per_val:.1f}倍 と高すぎます！**\n"
-                            f"   👉 *小学生にたとえると...* 本当は100円の価値しかないおもちゃに、みんなが飛びついて300円も払っているようなもの。あとでブームが去ると大損しちゃうかも！"
+                            f"   👉 *小学生にたとえると...* 本当は100円の価値しかないおもちゃに、300円も払っているようなもの。"
                         )
                     
                     if warnings:
@@ -423,7 +432,6 @@ with tab5:
                         g_mcap = (g_info.get("marketCap") or 5000000000) / 100000000
                         g_per = g_info.get("trailingPE") or g_info.get("forwardPE") or 0
                         g_pbr = g_info.get("priceToBook") or 1.0
-                        g_volume = g_info.get("volume") or 0
                         
                         st.success(f"### 🎯 【別枠分析】 {g_name} （コード: {growth_code}）")
                         
@@ -437,30 +445,22 @@ with tab5:
                         st.markdown("### 🚦 グロース株（別枠）の要注意チェック＆小学生向け解説")
                         
                         growth_warnings = []
-                        
-                        # グロース株特有の判定
                         if g_mcap < 100:
                             growth_warnings.append(
                                 f"⚠️ **【超小型株リスク】時価総額が {g_mcap:.1f}億円 と非常に小さいです！**\n"
-                                f"   👉 *小学生にたとえると...* クラス全員くらいの小さなグループみたいなもの。少しのお金で株価がロケットみたいに急上昇することもあれば、一瞬で奈落の底に落ちるくらい値動きが激しいので、お小遣いのほんの少しだけで遊ぶようにしてね！"
+                                f"   👉 *小学生にたとえると...* クラス全員くらいの小さなグループ。少しのお金で株価がロケットのように急上昇もするけれど、一瞬で下がることもあるのでお小遣いのほんの少しだけで遊ぶようにしてね！"
                             )
-                        
                         if g_per == 0 or g_per < 0:
                             growth_warnings.append(
-                                f"⚠️ **【赤字・無配リスク】現在、会社が利益を出せていない（または無配）状態です！**\n"
-                                f"   👉 *小学生にたとえると...* 今はお手伝いしても赤字続きでお小遣い（配当）がもらえない状態。未来のアイデアや大爆発する期待感だけでみんなが買っているから、期待が外れたときのダメージに気をつけて！"
-                            )
-                        elif g_per > 50:
-                            growth_warnings.append(
-                                f"⚠️ **【期待値が高すぎ】PERが {g_per:.1f}倍 と大変なことになっています！**\n"
-                                f"   👉 *小学生にたとえると...* 「将来すごーい天才になるはず！」という未来の期待だけで、いまの値段がめちゃくちゃ高くなっている状態。少しでも「あれ？」と思うと一気にみんなが逃げ出しちゃうから注意！"
+                                f"⚠️ **【赤字・無配リスク】現在、会社が利益を出せていない状態です！**\n"
+                                f"   👉 *小学生にたとえると...* 今はお手伝いしてもお小遣いがもらえない状態。未来のアイデアへの期待だけで買われているので注意！"
                             )
 
                         if growth_warnings:
                             for gw in growth_warnings:
                                 st.warning(gw)
                         else:
-                            st.info(f"🟢 **【別枠チェック良好】** {g_name} は極端な危険サインは出ていませんが、グロース株は値動きが激しいため、高配当の安全枠とはしっかりお財布を分けてハラハラを楽しんでください！")
+                            st.info(f"🟢 **【別枠チェック良好】** {g_name} は極端な危険サインは出ていません。ハラハラ感を楽しんでください！")
                             
                 except Exception as e:
                     st.error(f"データ取得中にエラーが発生しました: {e}")

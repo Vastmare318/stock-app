@@ -7,12 +7,13 @@ import pandas as pd
 st.set_page_config(page_title="高配当株 & グロース株 分析ツール", layout="wide")
 
 st.title("📈 高配当株 ＆ グロース株（別枠投資）分析ダッシュボード")
-st.caption("東証33業種・全銘柄連携データ ｜ 買い時判定機能追加 ｜ 高配当枠 ＆ グロース株の個別管理")
+st.caption("東証33業種・全銘柄連携データ ｜ 日本アクア追加対応 ｜ 高配当枠 ＆ グロース株の個別管理")
 
 # ==========================================
-# 主要銘柄のマスター辞書
+# 主要銘柄のマスター辞書（1429 日本アクアを追加）
 # ==========================================
 MASTER_STOCK_INFO = {
+    "1429": {"name": "日本アクア", "sector": "建設業"},
     "6166": {"name": "中村超硬", "sector": "機械"},
     "9432": {"name": "日本電信電話 (NTT)", "sector": "情報・通信業"},
     "8306": {"name": "三菱ＵＦＪフィナンシャル・グループ", "sector": "銀行業"},
@@ -105,7 +106,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🎯 マイ・ポートフォリオ診断（4銘柄）", 
     "🌟 全4,000社からおすすめ発掘", 
     "📊 東証33業種・一括比較",
-    "🚀 【別枠】6166等グロース株・特設診断"
+    "🚀 【別枠】中村超硬等・特設診断"
 ])
 
 # ==========================================
@@ -151,7 +152,7 @@ with tab1:
 
     if st.button("🔍 診断を実行する", type="primary", key="tab1_btn"):
         if not target_code.isdigit() or len(target_code) != 4:
-            st.error("⚠️ 証券コードは**4桁の数字**で入力してください（例: 8593、8306など）。")
+            st.error("⚠️ 証券コードは**4桁の数字**で入力してください（例: 1429、8593など）。")
         else:
             symbol = f"{target_code}.T"
             matched = jpx_df[jpx_df['コード'] == target_code]
@@ -170,7 +171,6 @@ with tab1:
                     if not current_price:
                         st.error(f"⚠️ 銘柄コード `{target_code}` ({jpx_name}) の株価データが取得できませんでした。")
                     else:
-                        # 過去の株価データ（半年分）を取得して移動平均線を計算（買い時判定用）
                         hist = stock.history(period="6mo")
                         ma75 = hist['Close'].mean() if not hist.empty else current_price
                         price_diff_pct = ((current_price - ma75) / ma75) * 100
@@ -215,7 +215,6 @@ with tab1:
                         c4.metric("PER", f"{per:.1f} 倍")
                         c5.metric("PBR", f"{pbr:.2f} 倍")
 
-                        # 🟢【新規追加】いまが買い時？タイミング判定コーナー
                         st.markdown("---")
                         st.markdown("### ⏰ 【いま買っていい？】買い時タイミング判定シグナル")
                         
@@ -282,7 +281,7 @@ with tab1:
 # ==========================================
 with tab2:
     st.subheader("🎯 マイ・ポートフォリオ一括診断（4銘柄）")
-    st.write("今回検討している高配当4銘柄（三菱HCキャピタル、三菱UFJ、積水ハウス、JT）の最新状況を一括でスキャンします。")
+    st.write("注目の高配当銘柄の最新状況を一括でスキャンします。")
     
     my_portfolio_codes = ["8593", "8306", "1928", "2914"]
     
@@ -350,14 +349,13 @@ with tab2:
         
         if portfolio_data:
             df_port = pd.DataFrame(portfolio_data)
-            st.success("非常にバランスの取れたディフェンシブ＆高配当ポートフォリオです！")
             st.dataframe(df_port, use_container_width=True, hide_index=True)
             
             st.write("### 📊 ポートフォリオの利回り比較")
             st.bar_chart(df_port.set_index("銘柄名")["配当利回り(%)"])
 
             st.markdown("---")
-            st.markdown("### 🚨 【もし違う株を買っちゃったとき用】すぐに手放した方がいい？要注意アラート欄")
+            st.markdown("### 🚨 要注意アラート欄")
             for alert in alert_messages:
                 if "【要注意】" in alert:
                     st.warning(alert)
@@ -369,7 +367,7 @@ with tab2:
 # ==========================================
 with tab3:
     st.subheader("🌟 全4,000社から高配当・優良銘柄を自動発掘")
-    recommend_pool = [k for k in MASTER_STOCK_INFO.keys() if k != "6166"]
+    recommend_pool = [k for k in MASTER_STOCK_INFO.keys() if k not in ["1429", "6166"]]
 
     if st.button("🚀 おすすめ銘柄を自動スキャンする", type="primary", key="tab3_btn"):
         scanned_results = []
@@ -404,15 +402,15 @@ with tab4:
     st.dataframe(target_df, hide_index=True)
 
 # ==========================================
-# タブ5：【別枠】6166等グロース株・特設診断
+# タブ5：【別枠】中村超硬等・特設診断
 # ==========================================
 with tab5:
-    st.subheader("🚀 【別枠投資】中村超硬（6166）などグロース株・特設チェック枠")
-    st.write("高配当の安定枠とは完全に分けて、値上がり益（キャピタルゲイン）や話題性を狙う別枠の株をチェックします。")
+    st.subheader("🚀 【別枠投資】中村超硬（6166）など特設チェック枠")
+    st.write("高配当の安定枠とは別に、値上がり益などを狙う別枠の株をチェックします。")
     
     growth_code = st.text_input("チェックしたい別枠の証券コードを入力（例: 6166）", value="6166", key="growth_input")
     
-    if st.button("🚀 別枠グロース株の診断を実行する", type="primary", key="growth_btn"):
+    if st.button("🚀 別枠株の診断を実行する", type="primary", key="growth_btn"):
         if not growth_code.isdigit() or len(growth_code) != 4:
             st.error("⚠️ 4桁の証券コードを入力してください。")
         else:
@@ -420,7 +418,7 @@ with tab5:
             g_master = MASTER_STOCK_INFO.get(growth_code, {})
             g_name = g_master.get("name", f"銘柄{growth_code}")
             
-            with st.spinner(f"【{g_name}】（{growth_code}）のグロース株データを解析中..."):
+            with st.spinner(f"【{g_name}】（{growth_code}）のデータを解析中..."):
                 try:
                     g_stock = yf.Ticker(g_symbol)
                     g_info = g_stock.info or {}
@@ -442,25 +440,25 @@ with tab5:
                         gc4.metric("PBR（解散価値）", f"{g_pbr:.2f} 倍")
                         
                         st.markdown("---")
-                        st.markdown("### 🚦 グロース株（別枠）の要注意チェック＆小学生向け解説")
+                        st.markdown("### 🚦 別枠チェック＆小学生向け解説")
                         
                         growth_warnings = []
                         if g_mcap < 100:
                             growth_warnings.append(
                                 f"⚠️ **【超小型株リスク】時価総額が {g_mcap:.1f}億円 と非常に小さいです！**\n"
-                                f"   👉 *小学生にたとえると...* クラス全員くらいの小さなグループ。少しのお金で株価がロケットのように急上昇もするけれど、一瞬で下がることもあるのでお小遣いのほんの少しだけで遊ぶようにしてね！"
+                                f"   👉 *小学生にたとえると...* 小さなグループ。少しのお金で株価が急上昇もするけれど、一瞬で下がることもあるので注意してね！"
                             )
                         if g_per == 0 or g_per < 0:
                             growth_warnings.append(
                                 f"⚠️ **【赤字・無配リスク】現在、会社が利益を出せていない状態です！**\n"
-                                f"   👉 *小学生にたとえると...* 今はお手伝いしてもお小遣いがもらえない状態。未来のアイデアへの期待だけで買われているので注意！"
+                                f"   👉 *小学生にたとえると...* 今はお手伝いしてもお小遣いがもらえない状態。未来の期待だけで買われているので注意！"
                             )
 
                         if growth_warnings:
                             for gw in growth_warnings:
                                 st.warning(gw)
                         else:
-                            st.info(f"🟢 **【別枠チェック良好】** {g_name} は極端な危険サインは出ていません。ハラハラ感を楽しんでください！")
+                            st.info(f"🟢 **【別枠チェック良好】** {g_name} は極端な危険サインは出ていません。")
                             
                 except Exception as e:
                     st.error(f"データ取得中にエラーが発生しました: {e}")

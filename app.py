@@ -4,7 +4,7 @@ import pandas as pd
 import streamlit as st
 import yfinance as yf
 
-# ページの基本設定（高速化のためレイアウトをワイドに）
+# ページの基本設定
 st.set_page_config(
     page_title="日本株・高配当＆保有株分析ダッシュボード",
     layout="wide",
@@ -12,14 +12,13 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# キャッシュを使ったデータ取得（高速化）
+# キャッシュを使ったデータ取得（修正版：シリアライズ可能なデータのみ返す）
 # ---------------------------------------------------------
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_stock_data(code):
-    """Yahoo Financeから株価データを取得（1時間キャッシュ）"""
-    # 4桁または3桁+英字1文字に対応（例: 1928, 353A）
+    """Yahoo Financeから株価・企業データを安全に取得（1時間キャッシュ）"""
     clean_code = str(code).strip().upper()
     if not re.match(r"^\d{3,4}[A-Z]?$", clean_code):
         return None
@@ -27,10 +26,10 @@ def get_stock_data(code):
     ticker_symbol = f"{clean_code}.T"
     try:
         ticker = yf.Ticker(ticker_symbol)
-        # 高速化のため最小限の情報を取得
         hist = ticker.history(period="1y")
         info = ticker.info
-        return {"ticker": ticker, "hist": hist, "info": info}
+        # Tickerオブジェクト自体は含めず、必要なデータだけを辞書で返す
+        return {"hist": hist, "info": info}
     except Exception:
         return None
 
@@ -38,13 +37,12 @@ def get_stock_data(code):
 # ---------------------------------------------------------
 # 保有銘柄・主要銘柄の定義
 # ---------------------------------------------------------
-# ユーザーが実際に保有している銘柄リスト（画像より）
 MY_PORTFOLIO = {
     "1429": "日本アクア",
     "1928": "積水ハウス",
     "2914": "JT",
     "4596": "窪田製薬HD",
-    "5016": "JX金属",  # ※上場状況に合わせたダミー/一般コード
+    "5016": "JX金属",
     "5401": "日本製鉄",
     "5802": "住友電工",
     "7794": "イーディーピー",
@@ -60,7 +58,6 @@ st.write(
     "保有している銘柄の素早いチェックや、4桁・英字付きコードの個別診断を高速で行えます。"
 )
 
-# タブの構成（中村超硬の別枠を削除し、保有株クイック検索を追加）
 tab1, tab2, tab3, tab4, tab5 = st.tabs(
     [
         "💼 保有・お気に入り株のクイック検索",
@@ -105,10 +102,7 @@ with tab1:
                 "currentPrice", hist["Close"].iloc[-1]
             )
             div_yield = info.get("dividendYield", 0)
-            if div_yield:
-                div_yield_pct = div_yield * 100
-            else:
-                div_yield_pct = 0.0
+            div_yield_pct = div_yield * 100 if div_yield else 0.0
 
             per = info.get("trailingPE", "N/A")
             pbr = info.get("priceToBook", "N/A")
@@ -125,7 +119,6 @@ with tab1:
                 f"{pbr:.2f}倍" if isinstance(pbr, (int, float)) else pbr,
             )
 
-            # 簡易コメント
             st.info(
                 f"💡 **ワンポイントチェック**: 現在の株価は `{current_price:,.1f}円` です。配当利回りやPERの水準を確認して、買い増しやホールドの判断材料にしてください。"
             )
@@ -166,7 +159,6 @@ with tab2:
                 st.success(f"### 銘柄名: {name} ({clean_c})")
                 st.write(f"**現在値**: {price:,.1f} 円")
 
-                # 8ステップ風の簡易表示
                 st.markdown("#### 📋 8ステップ自動診断サマリー")
                 st.markdown(
                     "1. **割安性チェック**: PER・PBRを確認し適正価格か判定"
@@ -265,7 +257,6 @@ with tab4:
         st.write(
             f"設定条件：配当利回り **{min_yield}%以上** 且つ PER **{max_per}倍以下** の銘柄を検索中..."
         )
-        # サンプル結果の表示
         sample_scraped = [
             {"コード": "1928", "銘柄名": "積水ハウス", "利回り": "4.3%", "PER": "8.5倍"},
             {"コード": "2914", "銘柄名": "JT", "利回り": "3.9%", "PER": "19.6倍"},

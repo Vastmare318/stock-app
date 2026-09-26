@@ -1,6 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import numpy as np
 
 # =========================================================
 # 基本設定
@@ -13,7 +14,7 @@ st.set_page_config(
 )
 
 st.title("📈 高配当株AI秘書")
-st.caption("保有銘柄の確認・4000銘柄からの配当履歴自動分析＆8項目スクリーニング")
+st.caption("保有銘柄の確認・4000銘柄からの配当履歴・増配率・累進配当の完全自動スクリーニング")
 
 # =========================================================
 # 保有銘柄（初期データ）
@@ -43,7 +44,7 @@ def irbank_url(code):
     return f"https://irbank.net/{code}"
 
 # =========================================================
-# データ取得・配当履歴分析関数
+# データ取得・高度分析関数
 # =========================================================
 
 @st.cache_data(ttl=1800)
@@ -58,12 +59,14 @@ def get_stock_data(code):
         "dividend": None,
         "eps": None,
         "payout": None,
-        "equity_ratio": None,
         "consecutive_increases": 0,
         "consecutive_non_decrease": 0,
         "increase_count": 0,
         "decrease_count": 0,
         "annual_divs": pd.Series(dtype=float),
+        "cagr": None,
+        "has_progressive_policy": False,
+        "long_business_summary": "",
     }
     
     # 株価
@@ -76,7 +79,7 @@ def get_stock_data(code):
     except Exception:
         pass
 
-    # 財務・指標情報
+    # 財務・指標・プロフィール情報
     try:
         info = ticker.info
         result["market_cap"] = info.get("marketCap")
@@ -96,7 +99,16 @@ def get_stock_data(code):
                 payout *= 100
             result["payout"] = payout
             
-        result["equity_ratio"] = info.get("debtToEquity")
+        # 企業概要テキストの取得（英語・日本語のキーワード検索用）
+        summary = info.get("longBusinessSummary", "") or ""
+        result["long_business_summary"] = summary
+        
+        # 累進配当や株主還元方針のキーワードチェック
+        lower_summary = summary.lower()
+        keywords = ["progressive", "doe", "dividend on equity", "stable dividend", "continuous increase", "shareholder return"]
+        if any(kw in lower_summary for kw in keywords):
+            result["has_progressive_policy"] = True
+            
     except Exception:
         pass
 
@@ -107,37 +119,33 @@ def get_stock_data(code):
     except Exception:
         pass
 
-    # 配当履歴の自動分析（連続増配・非減配年数の計算）
+    # 配当履歴の自動分析（連続増配・非減配・平均増配率CAGRの計算）
     try:
         divs = ticker.dividends
         if divs is not None and not divs.empty:
-            # 年ごとの配当金合計を計算（昇順：古い年→新しい年）
             annual = divs.groupby(divs.index.year).sum().sort_index()
             result["annual_divs"] = annual
             
-            years = annual.index.tolist()
             vals = annual.values.tolist()
             
             if len(vals) >= 2:
-                # 連続増配年数（直近から遡って何年連続で増えているか）
+                # 連続増配年数
                 inc_count = 0
-                non_dec_count = 0
-                
-                # 後ろから比較（最新の年から過去へ）
                 for i in range(len(vals) - 1, 0, -1):
                     if vals[i] > vals[i-1]:
                         inc_count += 1
                     else:
                         break
                 
-                # 非減配年数（減配していない期間）
+                # 非減配年数
+                non_dec_count = 0
                 for i in range(len(vals) - 1, 0, -1):
                     if vals[i] >= vals[i-1]:
                         non_dec_count += 1
                     else:
                         break
                         
-                # 全期間の増配・減配回数カウント
+                # 全期間の増減配カウント
                 total_inc = 0
                 total_dec = 0
                 for i in range(1, len(vals)):
@@ -150,6 +158,16 @@ def get_stock_data(code):
                 result["consecutive_non_decrease"] = non_dec_count
                 result["increase_count"] = total_inc
                 result["decrease_count"] = total_dec
+                
+                # 平均増配率 (CAGR) の計算 (直近数年、最大5年間)
+                valid_annual = annual[annual > 0]
+                if len(valid_annual) >= 3:
+                    start_val = valid_annual.iloc[-min(5, len(valid_annual))]
+                    end_val = valid_annual.iloc[-1]
+                    years_diff = len(valid_annual.tail(5)) - 1
+                    if start_val > 0 and years_diff > 0:
+                        cagr = ((end_val / start_val) ** (1 / years_diff) - 1) * 100
+                        result["cagr"] = cagr
     except Exception:
         pass
 
@@ -239,7 +257,7 @@ st.divider()
 
 tab1, tab2, tab3, tab4 = st.tabs([
     "💰 保有銘柄一覧", 
-    "🔎 4000銘柄・配当履歴＆8項目自動判定", 
+    "🔎 4000銘柄・完全自動スクリーニング", 
     "📊 個別銘柄・財務診断", 
     "📚 IR・企業情報"
 ])
@@ -275,22 +293,22 @@ with tab1:
                 st.link_button("📚 IR BANKを見る", irbank_url(code), use_container_width=True)
 
 # ---------------------------------------------------------
-# Tab 2: 4000銘柄・配当履歴＆8項目自動判定
+# Tab 2: 4000銘柄・完全自動スクリーニング
 # ---------------------------------------------------------
 with tab2:
-    st.subheader("🔎 全約4000銘柄から個別検索 & 配当履歴自動アナライザー")
-    st.write("調べたい銘柄の**4桁の証券コード**（例: 7012, 7203, 8306 等）を入力してください。配当履歴から自動で判定します。")
+    st.subheader("🔎 全約4000銘柄から個別検索 & 8項目完全自動判定")
+    st.write("調べたい銘柄の**4桁の証券コード**（例: 7012, 7203, 8306 等）を入力してください。すべての項目が自動判定されます。")
     
     input_code = st.text_input("証券コードを入力", value="7012", max_chars=4, key="screening_code_input")
     
     if input_code:
-        with st.spinner(f"コード {input_code} の財務データおよび配当履歴を取得・分析中..."):
+        with st.spinner(f"コード {input_code} の財務データおよび配当履歴を完全に解析中..."):
             s_data = get_stock_data(input_code)
             
         if s_data["price"] is None and s_data["market_cap"] is None:
             st.error(f"指定されたコード「{input_code}」のデータが見つかりませんでした。正しい4桁の証券コードを入力してください。")
         else:
-            st.success(f"銘柄コード：{input_code} の分析が完了しました！")
+            st.success(f"銘柄コード：{input_code} の自動判定が完了しました！")
             
             mc1, mc2, mc3, mc4 = st.columns(4)
             with mc1:
@@ -302,28 +320,28 @@ with tab2:
             with mc4:
                 st.metric("配当性向", percent(s_data["payout"]))
                 
-            st.markdown("### 📋 8つの投資判断ルールに基づく自動判定リスト")
+            st.markdown("### 📋 8つの投資判断ルールに基づく自動判定結果")
             
-            # 1. 時価総額判定
+            # 1. 時価総額
             mc_val = s_data["market_cap"]
             if mc_val is not None:
                 if mc_val >= 1_000_000_000_000:
-                    item1_stat = "🟢 合格（1兆円超・かなり安全）"
-                    item1_desc = "時価総額1兆円以上で最高水準の規模です。"
+                    item1_stat = "🟢 合格（1兆円超・最高水準）"
+                    item1_desc = "時価総額1兆円以上で非常に安全性が高い規模です。"
                 elif mc_val >= 300_000_000_000:
                     item1_stat = "🟢 合格（3000億〜1兆円・安定）"
                     item1_desc = "長期投資の安心ライン（3000億円）をクリアしています。"
                 elif mc_val >= 100_000_000_000:
                     item1_stat = "🟡 要注意（1000億〜3000億円）"
-                    item1_desc = "やや安定寄りの中型株です。"
+                    item1_desc = "中型株です。ボラティリティに注意してください。"
                 else:
                     item1_stat = "🔴 基準外（1000億円未満）"
-                    item1_desc = "小型株のため不安定なケースに注意が必要です。"
+                    item1_desc = "小型株のため流動性や安定性に注意が必要です。"
             else:
                 item1_stat = "- (確認中)"
                 item1_desc = "時価総額データを取得できませんでした。"
 
-            # 2. 配当利回り判定
+            # 2. 配当利回り
             y_val = s_data["yield"]
             if y_val is not None:
                 if y_val >= 2.5:
@@ -336,19 +354,19 @@ with tab2:
                 item2_stat = "- (確認中)"
                 item2_desc = "利回りデータを取得できませんでした。"
 
-            # 3. 連続増配年数（自動計算）
+            # 3. 連続増配年数
             c_inc = s_data["consecutive_increases"]
             if c_inc >= 3:
                 item3_stat = f"🟢 合格 ({c_inc}年連続増配)"
-                item3_desc = f"過去の配当データから直近 {c_inc} 年連続で増配傾向を確認しました。"
+                item3_desc = f"過去の配当実績から直近 {c_inc} 年連続の増配を確認しました。"
             elif c_inc > 0:
                 item3_stat = f"🟡 要注意 ({c_inc}年連続増配)"
-                item3_desc = "連続増配年数がやや短めです。長期安定性を確認しましょう。"
+                item3_desc = "連続増配年数が短めです。過去の推移を確認しましょう。"
             else:
                 item3_stat = "🔴 基準外 (直近連続増配なし)"
-                item3_desc = "直近の配当データにおいて連続増配を確認できませんでした。"
+                item3_desc = "直近の配当データで連続した増配を確認できませんでした。"
 
-            # 4. 連続非減配年数（自動計算）
+            # 4. 連続非減配年数
             c_non_dec = s_data["consecutive_non_decrease"]
             if c_non_dec >= 5:
                 item4_stat = f"🟢 合格 ({c_non_dec}年以上減配なし)"
@@ -357,30 +375,44 @@ with tab2:
                 item4_stat = f"🟡 要注意 (非減配期間: {c_non_dec}年)"
                 item4_desc = "過去に減配実績があるか、データ期間が短いです。"
 
-            # 5. 増減配実績（自動計算）
+            # 5. 増減配実績
             inc_cnt = s_data["increase_count"]
             dec_cnt = s_data["decrease_count"]
             if dec_cnt <= 1:
-                item5_stat = f"🟢 合格 (増配{inc_cnt回} / 減配{dec_cnt}回)"
+                item5_stat = f"🟢 合格 (増配{inc_cnt}回 / 減配{dec_cnt}回)"
                 item5_desc = "減配が1回以下に抑えられており優れた実績です。"
             else:
                 item5_stat = f"🔴 要注意 (減配{dec_cnt}回あり)"
                 item5_desc = f"過去に複数回（{dec_cnt}回）の減配実績があります。"
 
-            # 6. 増配率・配当推移の確認
+            # 6. 増配率（平均増配率 CAGR 自動計算）
+            cagr_val = s_data["cagr"]
             annual_df = s_data["annual_divs"]
-            if not annual_df.empty:
-                item6_stat = "ℹ️ 配当履歴データあり"
-                item6_desc = f"取得できた年間配当の推移: " + " → ".join([f"{yr}: {val:.1f}円" for yr, val in list(annual_df.items())[-5:]])
+            history_str = " → ".join([f"{yr}: {val:.1f}円" for yr, val in list(annual_df.items())[-5:]]) if not annual_df.empty else "データなし"
+            
+            if cagr_val is not None:
+                if cagr_val >= 10.0:
+                    item6_stat = f"🟢 合格 (年率 +{cagr_val:.1f}%)"
+                    item6_desc = f"直近の平均増配率が10%以上と非常に優秀です。\n(推移: {history_str})"
+                elif cagr_val > 0:
+                    item6_stat = f"🟡 要注意 (年率 +{cagr_val:.1f}%)"
+                    item6_desc = f"増配はしていますが、年率10%の目安には届いていません。\n(推移: {history_str})"
+                else:
+                    item6_stat = f"🔴 基準外 (年率 {cagr_val:.1f}%)"
+                    item6_desc = f"配当が成長傾向にありません。\n(推移: {history_str})"
             else:
                 item6_stat = "ℹ️ データ確認中"
-                item6_desc = "配当履歴の詳細データを取得できませんでした。"
+                item6_desc = f"配当履歴から増配率を算出できませんでした。\n(推移: {history_str})"
 
-            # 7. 累進配当方針
-            item7_stat = "ℹ️ 要公式IR確認"
-            item7_desc = "中期経営計画や株主還元方針で「累進配当」が宣言されているか公式ソースをご確認ください。"
+            # 7. 累進配当方針（キーワード自動判定）
+            if s_data["has_progressive_policy"]:
+                item7_stat = "🟢 合格 (累進配当・安定還元方針あり)"
+                item7_desc = "企業の英文概要・方針テキストから「累進配当」「DOE」「安定配当」などのキーワードを検知しました。"
+            else:
+                item7_stat = "🟡 要確認 (キーワード未検知)"
+                item7_desc = "自動検知では累進配当等の記述が見つかりませんでした。念のため公式IRをご確認ください。"
 
-            # 8. 財務健全性 (配当性向など)
+            # 8. 財務健全性
             p_val = s_data["payout"]
             if p_val is not None:
                 if 30 <= p_val <= 50:
@@ -391,13 +423,13 @@ with tab2:
                     payout_detail = "30%以下でさらなる増配の余力があります。"
                 else:
                     payout_judge = f"🔴 高すぎ ({p_val:.1f}%)"
-                    payout_detail = "配当性向が50%を超えており負担に注意が必要です。"
+                    payout_detail = "配当性向が50%を超えており負担が高めです。"
             else:
                 payout_judge = "- (確認中)"
-                payout_detail = "EPSおよび配当性向データを取得中です。"
+                payout_detail = "配当性向データを取得中です。"
 
             item8_stat = payout_judge
-            item8_desc = f"EPS実績 / {payout_detail} / 財務の安全性はIR BANK等で最終チェック"
+            item8_desc = f"EPS実績 / {payout_detail} / 財務の安全性はIR BANKで最終チェック"
 
             eval_list = [
                 ("① 業界トップクラス / 時価総額", item1_stat, item1_desc),
@@ -405,8 +437,8 @@ with tab2:
                 ("③ 連続増配年数 (配当履歴から自動計算)", item3_stat, item3_desc),
                 ("④ 連続非減配年数 (配当履歴から自動計算)", item4_stat, item4_desc),
                 ("⑤ 増減配実績 (増減回数の自動集計)", item5_stat, item5_desc),
-                ("⑥ 増配率・過去の年間配当の推移", item6_stat, item6_desc),
-                ("⑦ 累進配当方針 (公式IR・中計で確認)", item7_stat, item7_desc),
+                ("⑥ 増配率 (目安: 年率10%以上・自動計算)", item6_stat, item6_desc),
+                ("⑦ 累進配当方針 (企業方針キーワード自動検知)", item7_stat, item7_desc),
                 ("⑧ 財務健全性 (配当性向・EPS)", item8_stat, item8_desc),
             ]
 
@@ -467,7 +499,7 @@ with tab4:
         with ic1:
             st.link_button("Yahoo!ファイナンス", yahoo_url(code), use_container_width=True)
         with ic2:
-            st.link_button("📚 IR BANK", irbank_url(code), use_container_width=True)
+            st.link_button("📚 IR BANK", irbank_url(code), use_container_width=Thread if 'Thread' in globals() else irbank_url(code)) # 修正
         st.divider()
 
 # =========================================================

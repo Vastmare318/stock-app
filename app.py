@@ -3,12 +3,11 @@ import streamlit as st
 
 st.set_page_config(page_title="銘柄一覧アプリ", layout="wide")
 
-st.title("📊 銘柄管理ダッシュボード")
+st.title("📊 銘柄管理アプリ")
 
-# サンプルデータの作成
-# ※ 実際のアプリに合わせて、保有株数、評価額、利回り、年間配当、外部サイトURLのデータを設定してください
+# 元の数値データを含めたデータフレーム
 data = {
-    "銘柄名": [
+    "銘柄": [
         "1429: 日本アクア",
         "1928: 積水ハウス",
         "2914: JT",
@@ -68,6 +67,7 @@ data = {
         "96円",
         "520円",
     ],
+    # 一番右に配置する外部サイトへのURL
     "外部サイト": [
         "https://example.com/1429",
         "https://example.com/1928",
@@ -79,27 +79,25 @@ data = {
         "https://example.com/7794",
         "https://example.com/8306",
         "https://example.com/8593",
-    ],  # 一番右に配置する外部サイトへのURL
+    ],
 }
 
 df = pd.DataFrame(data)
 
-st.subheader("📋 保管銘柄・指標一覧（右端のリンクから外部サイトへ移動できます）")
-
-# st.dataframe を使って、一番右にリンクカラムを配置
+# テーブルを表示（一番右の列をLinkColumnにしてクリックで飛べるようにする）
 st.dataframe(
     df,
     column_config={
-        "銘柄名": st.column_config.TextColumn("銘柄名", width="medium"),
+        "銘柄": st.column_config.TextColumn("銘柄", width="medium"),
         "株数": st.column_config.TextColumn("株数", width="small"),
         "評価額": st.column_config.TextColumn("評価額", width="small"),
         "利回り": st.column_config.TextColumn("利回り", width="small"),
         "年間配当": st.column_config.TextColumn("年間配当", width="small"),
-        # 1番右に配置し、クリックして飛べるようにする列
+        # 一番右の列：クリックして外部サイトに飛べるリンク
         "外部サイト": st.column_config.LinkColumn(
             "外部サイト",
-            help="クリックすると外部サイトが開きます",
-            display_text="🔗 サイトを開く",  # ボタンやテキストとして表示させる名前
+            help="クリックして外部サイトを開く",
+            display_text="🔗 サイトを開く",
             width="medium",
         ),
     },

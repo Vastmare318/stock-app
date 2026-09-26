@@ -194,37 +194,39 @@ tab1, tab2, tab3, tab4 = st.tabs([
 ])
 
 # ---------------------------------------------------------
-# Tab 1: 保有銘柄一覧
+# Tab 1: 保有銘柄一覧（テーブルリスト化版）
 # ---------------------------------------------------------
 with tab1:
-    st.subheader("💰 保有銘柄リスト")
+    st.subheader("💰 保有銘柄一覧（10銘柄リスト）")
+    st.write("保有している10銘柄の状況を一覧で確認できます。")
+    
+    # 表示用の綺麗に整えたデータフレームを作成
+    display_df = pd.DataFrame({
+        "コード": df_portfolio["code"],
+        "銘柄名": df_portfolio["name"],
+        "株価": df_portfolio["price"].apply(yen),
+        "株数": df_portfolio["shares"].apply(lambda x: f"{int(x)}株"),
+        "評価額": df_portfolio["value"].apply(yen),
+        "利回り": df_portfolio["yield"].apply(percent),
+        "年間配当": df_portfolio["annual_dividend"].apply(yen),
+    })
+    
+    # テーブルで表示（スマホでもスクロールして見やすい）
+    st.dataframe(display_df, use_container_width=True, hide_index=True)
+    
+    st.markdown("#### 🔗 各銘柄の外部サイトリンク")
     for _, row in df_portfolio.iterrows():
         code = row["code"]
         name = row["name"]
-        with st.container(border=True):
-            c_a, c_b = st.columns([2, 5])
-            with c_a:
-                st.markdown(f"### {name}")
-                st.caption(f"証券コード：{code}")
-            with c_b:
-                sc1, sc2, sc3, sc4 = st.columns(4)
-                with sc1:
-                    st.metric("株価", yen(row["price"]))
-                with sc2:
-                    st.metric("保有株数", f"{int(row['shares'])}株")
-                with sc3:
-                    st.metric("配当利回り", percent(row["yield"]))
-                with sc4:
-                    st.metric("年間配当", yen(row["annual_dividend"]))
-            
-            bt1, bt2 = st.columns(2)
-            with bt1:
-                st.link_button("📊 Yahoo!ファイナンス", yahoo_url(code), use_container_width=True)
-            with bt2:
-                st.link_button("📚 IR BANK", irbank_url(code), use_container_width=True)
+        with st.expander(f"{code} : {name}"):
+            b1, b2 = st.columns(2)
+            with b1:
+                st.link_button("📊 Yahoo!ファイナンスを見る", yahoo_url(code), use_container_width=True)
+            with b2:
+                st.link_button("📚 IR BANKを見る", irbank_url(code), use_container_width=True)
 
 # ---------------------------------------------------------
-# Tab 2: 4000銘柄・8項目自動スクリーニング（自動リスト化版）
+# Tab 2: 4000銘柄・8項目自動スクリーニング
 # ---------------------------------------------------------
 with tab2:
     st.subheader("🔎 全約4000銘柄から個別検索 & 8項目自動評価チェッカー")
@@ -241,7 +243,6 @@ with tab2:
         else:
             st.success(f"銘柄コード：{input_code} の評価が完了しました！")
             
-            # 基本メトリクス表示
             mc1, mc2, mc3, mc4 = st.columns(4)
             with mc1:
                 st.metric("株価", yen(s_data["price"]))
@@ -254,7 +255,6 @@ with tab2:
                 
             st.markdown("### 📋 8つの投資判断ルールに基づく自動判定リスト")
             
-            # 1. 業界・時価総額判定 (目安: 3000億以上、1兆円以上最高)
             mc_val = s_data["market_cap"]
             if mc_val is not None:
                 if mc_val >= 1_000_000_000_000:
@@ -273,7 +273,6 @@ with tab2:
                 item1_stat = "- (データ確認中)"
                 item1_desc = "時価総額データを取得できませんでした。"
 
-            # 2. 配当利回り判定 (目安: 2.5%以上)
             y_val = s_data["yield"]
             if y_val is not None:
                 if y_val >= 2.5:
@@ -286,27 +285,21 @@ with tab2:
                 item2_stat = "- (データ確認中)"
                 item2_desc = "利回りデータを取得できませんでした。"
 
-            # 3. 連続増配年数
             item3_stat = "ℹ️ 要IR確認"
             item3_desc = "長期で連続増配しているか公式IRまたはIR BANKで最終確認してください。"
 
-            # 4. 連続非減配年数（コロナ等の一時ショックは柔軟に許容する視点）
             item4_stat = "ℹ️ 要IR確認"
             item4_desc = "コロナ等の外部ショックによる一時的減配を除き、構造的な減配がないか確認します。"
 
-            # 5. 増減配実績 (増配7回・減配1回以下目安)
             item5_stat = "ℹ️ 要IR確認"
             item5_desc = "過去の期間で増配回数が多く、減配が1回以下に抑えられているか確認します。"
 
-            # 6. 増配率 (10%以上目安 / 5・10年)
             item6_stat = "ℹ️ 要IR確認"
             item6_desc = "過去5年・10年の平均増配率（CAGR）が10%以上、または配当が順調に成長しているか確認します。"
 
-            # 7. 累進配当方針
             item7_stat = "ℹ️ 要公式IR確認"
             item7_desc = "中期経営計画や株主還元方針で「累進配当」が宣言されているか公式ソースを確認します。"
 
-            # 8. EPS・配当性向・営業CF・自己資本比率
             p_val = s_data["payout"]
             if p_val is not None:
                 if 30 <= p_val <= 50:
@@ -323,18 +316,17 @@ with tab2:
                 payout_detail = "EPSおよび配当性向データを取得中です。"
 
             item8_stat = payout_judge
-            item8_desc = f"EPS 10年右肩上がり / {payout_detail} / 営業CF黒字・自己資本比率40%以上（銀行・商社・不動産は同業他社と比較）"
+            item8_desc = f"EPS 10年右肩上がり / {payout_detail} / 営業CF黒字・自己資本比率40%以上"
 
-            # 8項目をカード形式でリスト化
             eval_list = [
-                ("① 業界トップクラス / 時価総額 (目安: 3000億〜1兆円以上)", item1_stat, item1_desc),
+                ("① 業界トップクラス / 時価総額", item1_stat, item1_desc),
                 ("② 配当利回り (目安: 2.5%以上)", item2_stat, item2_desc),
                 ("③ 連続増配年数", item3_stat, item3_desc),
-                ("④ 連続非減配年数 (コロナ等の特例考慮)", item4_stat, item4_desc),
-                ("⑤ 増減配実績 (増配7回・減配1回以下)", item5_stat, item5_desc),
-                ("⑥ 増配率 (目安: 年率10%以上 / 5・10年)", item6_stat, item6_desc),
-                ("⑦ 累進配当方針 (公式IR・中計で確認)", item7_stat, item7_desc),
-                ("⑧ 財務健全性 (EPS・配当性向30-50%・営業CF・自己資本比率40%)", item8_stat, item8_desc),
+                ("④ 連続非減配年数", item4_stat, item4_desc),
+                ("⑤ 増減配実績", item5_stat, item5_desc),
+                ("⑥ 増配率 (目安: 年率10%以上)", item6_stat, item6_desc),
+                ("⑦ 累進配当方針", item7_stat, item7_desc),
+                ("⑧ 財務健全性 (EPS・配当性向・CF)", item8_stat, item8_desc),
             ]
 
             for title, status, desc in eval_list:
@@ -385,7 +377,7 @@ with tab3:
 
 # ---------------------------------------------------------
 # Tab 4: IR・企業情報
-# ------------------
+# ---------------------------------------------------------
 with tab4:
     st.subheader("📚 保有銘柄のIRリンク集")
     for code, data in PORTFOLIO.items():

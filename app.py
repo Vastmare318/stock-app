@@ -13,7 +13,7 @@ st.set_page_config(
 )
 
 st.title("📈 高配当株AI秘書")
-st.caption("保有銘柄の確認・4000銘柄からの8項目スクリーニング・個別財務診断")
+st.caption("保有銘柄の確認・4000銘柄からの8項目自動スクリーニング・個別財務診断")
 
 # =========================================================
 # 保有銘柄（初期データ）
@@ -188,7 +188,7 @@ st.divider()
 
 tab1, tab2, tab3, tab4 = st.tabs([
     "💰 保有銘柄一覧", 
-    "🔎 4000銘柄・8項目スクリーニング検索", 
+    "🔎 4000銘柄・8項目自動スクリーニング", 
     "📊 個別銘柄・財務診断", 
     "📚 IR・企業情報"
 ])
@@ -224,22 +224,22 @@ with tab1:
                 st.link_button("📚 IR BANK", irbank_url(code), use_container_width=True)
 
 # ---------------------------------------------------------
-# Tab 2: 4000銘柄・8項目スクリーニング検索（新機能）
+# Tab 2: 4000銘柄・8項目自動スクリーニング（自動リスト化版）
 # ---------------------------------------------------------
 with tab2:
-    st.subheader("🔎 全約4000銘柄から個別検索 & 8項目評価チェッカー")
-    st.write("気になる日本の銘柄コード（例: `7203`（トヨタ）, `8306`（三菱UFJ）, `9432`（NTT）など4桁の数字）を入力してください。ご提示いただいた8つの基準に照らし合わせて自動評価します。")
+    st.subheader("🔎 全約4000銘柄から個別検索 & 8項目自動評価チェッカー")
+    st.write("4桁の証券コードを入力すると、あなたの投資ルール（8項目）に照らし合わせて自動で判定・リスト化します。")
     
-    input_code = st.text_input("証券コードを入力（4桁）", value="7203", max_chars=4)
+    input_code = st.text_input("証券コードを入力（例: 7203, 8306, 2914）", value="7203", max_chars=4)
     
     if input_code:
-        with st.spinner(f"コード {input_code} のデータを取得し、8項目で評価しています..."):
+        with st.spinner(f"コード {input_code} のデータを取得・評価中..."):
             s_data = get_stock_data(input_code)
             
         if s_data["price"] is None and s_data["market_cap"] is None:
             st.error(f"指定されたコード「{input_code}」のデータが見つかりませんでした。正しい4桁の証券コードを入力してください。")
         else:
-            st.success(f"銘柄コード：{input_code} のデータを取得しました！")
+            st.success(f"銘柄コード：{input_code} の評価が完了しました！")
             
             # 基本メトリクス表示
             mc1, mc2, mc3, mc4 = st.columns(4)
@@ -252,82 +252,101 @@ with tab2:
             with mc4:
                 st.metric("配当性向", percent(s_data["payout"]))
                 
-            st.markdown("### 📋 ご提示いただいた8つの評価項目に基づく判定結果")
+            st.markdown("### 📋 8つの投資判断ルールに基づく自動判定リスト")
             
-            # 8項目の判定ロジック構築
-            # 1. 業界・時価総額
+            # 1. 業界・時価総額判定 (目安: 3000億以上、1兆円以上最高)
             mc_val = s_data["market_cap"]
             if mc_val is not None:
                 if mc_val >= 1_000_000_000_000:
-                    eval_1 = "🟢 1兆円以上（かなり安全・大型株）"
+                    item1_stat = "🟢 合格（1兆円超・かなり安全）"
+                    item1_desc = "時価総額1兆円以上で最高水準の規模です。"
                 elif mc_val >= 300_000_000_000:
-                    eval_1 = "🟢 3,000億〜1兆円（安定寄り・中大型）"
+                    item1_stat = "🟢 合格（3000億〜1兆円・安定）"
+                    item1_desc = "長期投資の安心ライン（3000億円）をクリアしています。"
                 elif mc_val >= 100_000_000_000:
-                    eval_2 = "🟡 1,000億〜3,000億円（やや安定・中型）"
-                    eval_1 = eval_2
+                    item1_stat = "🟡 要注意（1000億〜3000億円）"
+                    item1_desc = "やや安定寄りの中型株です。ボラティリティに注意。"
                 else:
-                    eval_1 = "⚠️ 1,000億円未満（小型株・不安定なケースに注意）"
+                    item1_stat = "🔴 基準外（1000億円未満）"
+                    item1_desc = "小型株のため不安定なケースに注意が必要です。"
             else:
-                eval_1 = "- (時価総額データ確認中)"
-                
-            # 2. 配当利回り
+                item1_stat = "- (データ確認中)"
+                item1_desc = "時価総額データを取得できませんでした。"
+
+            # 2. 配当利回り判定 (目安: 2.5%以上)
             y_val = s_data["yield"]
             if y_val is not None:
-                eval_2 = "🟢 2.5%以上クリア" if y_val >= 2.5 else "⚠️ 2.5%未満（基準未満の可能性）"
+                if y_val >= 2.5:
+                    item2_stat = f"🟢 合格 ({y_val:.2f}%)"
+                    item2_desc = "配当利回り2.5%の基準をクリアしています。"
+                else:
+                    item2_stat = f"🔴 基準外 ({y_val:.2f}%)"
+                    item2_desc = "配当利回りが2.5%を下回っています。"
             else:
-                eval_2 = "- (利回りデータ確認中)"
-                
-            # 3 & 4. 連続増配・非減配
-            eval_3 = "要IR確認（過去の連続増配年数をチェック）"
-            eval_4 = "要IR確認（コロナ等の特殊要因による一時的減配か、その後の回復を確認）"
-            
+                item2_stat = "- (データ確認中)"
+                item2_desc = "利回りデータを取得できませんでした。"
+
+            # 3. 連続増配年数
+            item3_stat = "ℹ️ 要IR確認"
+            item3_desc = "長期で連続増配しているか公式IRまたはIR BANKで最終確認してください。"
+
+            # 4. 連続非減配年数（コロナ等の一時ショックは柔軟に許容する視点）
+            item4_stat = "ℹ️ 要IR確認"
+            item4_desc = "コロナ等の外部ショックによる一時的減配を除き、構造的な減配がないか確認します。"
+
             # 5. 増減配実績 (増配7回・減配1回以下目安)
-            eval_5 = "要IR/IR BANK確認（増配回数・減配回数）"
-            
-            # 6. 増配率 (10%以上目安)
-            eval_6 = "要IR BANK確認（5年・10年平均増配率・倍率）"
-            
-            # 7. 累進配当
-            eval_7 = "要公式IR・中期経営計画確認（累進配当方針の宣言有無）"
-            
+            item5_stat = "ℹ️ 要IR確認"
+            item5_desc = "過去の期間で増配回数が多く、減配が1回以下に抑えられているか確認します。"
+
+            # 6. 増配率 (10%以上目安 / 5・10年)
+            item6_stat = "ℹ️ 要IR確認"
+            item6_desc = "過去5年・10年の平均増配率（CAGR）が10%以上、または配当が順調に成長しているか確認します。"
+
+            # 7. 累進配当方針
+            item7_stat = "ℹ️ 要公式IR確認"
+            item7_desc = "中期経営計画や株主還元方針で「累進配当」が宣言されているか公式ソースを確認します。"
+
             # 8. EPS・配当性向・営業CF・自己資本比率
             p_val = s_data["payout"]
             if p_val is not None:
                 if 30 <= p_val <= 50:
-                    p_text = "配当性向30〜50%（健全水準）"
+                    payout_judge = f"🟢 健全 ({p_val:.1f}%)"
+                    payout_detail = "配当性向30〜50%の理想的な健全水準です。"
                 elif p_val < 30:
-                    p_text = "配当性向30%以下（余力あり）"
+                    payout_judge = f"🟢 余力あり ({p_val:.1f}%)"
+                    payout_detail = "30%以下で社内留保・増配の余力が十分あります。"
                 else:
-                    p_text = "配当性向50%超（やや高め・負担注意）"
+                    payout_judge = f"🔴 高すぎ ({p_val:.1f}%)"
+                    payout_detail = "配当性向が50%を超えており負担が高めです。"
             else:
-                p_text = "配当性向データ確認中"
-            eval_8 = f"EPS 10年右肩上がりか要確認 / {p_text} / 営業CF黒字・自己資本比率40%以上（銀行・商社・不動産は業界比較）"
+                payout_judge = "- (確認中)"
+                payout_detail = "EPSおよび配当性向データを取得中です。"
 
-            eval_df = pd.DataFrame({
-                "スクリーニング・評価項目": [
-                    "① 業界トップクラス / 時価総額",
-                    "② 配当利回り",
-                    "③ 連続増配年数",
-                    "④ 連続非減配年数",
-                    "⑤ 増減配実績",
-                    "⑥ 増配率",
-                    "⑦ 累進配当方針",
-                    "⑧ EPS・配当性向・営業CF・自己資本比率"
-                ],
-                "判定・ステータス": [
-                    eval_1,
-                    eval_2,
-                    eval_3,
-                    eval_4,
-                    eval_5,
-                    eval_6,
-                    eval_7,
-                    eval_8
-                ]
-            })
-            
-            st.dataframe(eval_df, use_container_width=True, hide_index=True)
-            
+            item8_stat = payout_judge
+            item8_desc = f"EPS 10年右肩上がり / {payout_detail} / 営業CF黒字・自己資本比率40%以上（銀行・商社・不動産は同業他社と比較）"
+
+            # 8項目をカード形式でリスト化
+            eval_list = [
+                ("① 業界トップクラス / 時価総額 (目安: 3000億〜1兆円以上)", item1_stat, item1_desc),
+                ("② 配当利回り (目安: 2.5%以上)", item2_stat, item2_desc),
+                ("③ 連続増配年数", item3_stat, item3_desc),
+                ("④ 連続非減配年数 (コロナ等の特例考慮)", item4_stat, item4_desc),
+                ("⑤ 増減配実績 (増配7回・減配1回以下)", item5_stat, item5_desc),
+                ("⑥ 増配率 (目安: 年率10%以上 / 5・10年)", item6_stat, item6_desc),
+                ("⑦ 累進配当方針 (公式IR・中計で確認)", item7_stat, item7_desc),
+                ("⑧ 財務健全性 (EPS・配当性向30-50%・営業CF・自己資本比率40%)", item8_stat, item8_desc),
+            ]
+
+            for title, status, desc in eval_list:
+                with st.container(border=True):
+                    c_title, c_status = st.columns([3, 2])
+                    with c_title:
+                        st.markdown(f"**{title}**")
+                        st.caption(desc)
+                    with c_status:
+                        st.markdown(f"### {status}")
+
+            st.divider()
             st.markdown("#### 🔗 詳細な深掘りリンク")
             lk1, lk2 = st.columns(2)
             with lk1:
@@ -366,7 +385,7 @@ with tab3:
 
 # ---------------------------------------------------------
 # Tab 4: IR・企業情報
-# ---------------------------------------------------------
+# ------------------
 with tab4:
     st.subheader("📚 保有銘柄のIRリンク集")
     for code, data in PORTFOLIO.items():

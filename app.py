@@ -17,20 +17,20 @@ st.title("📈 高配当株AI秘書")
 st.caption("保有銘柄の確認・4000銘柄からの配当履歴・増配率・累進配当の完全自動スクリーニング")
 
 # =========================================================
-# 保有銘柄（初期データ）
+# 保有銘柄（証券口座の最新データに同期）
 # =========================================================
 
 PORTFOLIO = {
-    "1429": {"name": "日本アクア", "shares": 100},
-    "1928": {"name": "積水ハウス", "shares": 5},
-    "2914": {"name": "JT", "shares": 20},
-    "4596": {"name": "窪田製薬HD", "shares": 10},
-    "5016": {"name": "JX金属", "shares": 1},
-    "5401": {"name": "日本製鉄", "shares": 1},
-    "5802": {"name": "住友電工", "shares": 3},
+    "1429": {"name": "日本アクア", "shares": 104},
+    "1928": {"name": "積水ハウス", "shares": 6},
+    "2914": {"name": "JT", "shares": 24},
+    "5401": {"name": "日本製鉄", "shares": 5},
+    "7012": {"name": "川崎重工業", "shares": 1},
     "7794": {"name": "イーディーピー", "shares": 8},
-    "8306": {"name": "三菱UFJ", "shares": 1},
-    "8593": {"name": "三菱HCキャピタル", "shares": 10},
+    "8306": {"name": "三菱UFJ", "shares": 3},
+    "8593": {"name": "三菱HCキャピタル", "shares": 26},
+    "8766": {"name": "東京海上", "shares": 11},
+    "9432": {"name": "NTT", "shares": 102},
 }
 
 # =========================================================
@@ -99,11 +99,9 @@ def get_stock_data(code):
                 payout *= 100
             result["payout"] = payout
             
-        # 企業概要テキストの取得（英語・日本語のキーワード検索用）
         summary = info.get("longBusinessSummary", "") or ""
         result["long_business_summary"] = summary
         
-        # 累進配当や株主還元方針のキーワードチェック
         lower_summary = summary.lower()
         keywords = ["progressive", "doe", "dividend on equity", "stable dividend", "continuous increase", "shareholder return"]
         if any(kw in lower_summary for kw in keywords):
@@ -119,7 +117,7 @@ def get_stock_data(code):
     except Exception:
         pass
 
-    # 配当履歴の自動分析（連続増配・非減配・平均増配率CAGRの計算）
+    # 配当履歴の自動分析
     try:
         divs = ticker.dividends
         if divs is not None and not divs.empty:
@@ -129,7 +127,6 @@ def get_stock_data(code):
             vals = annual.values.tolist()
             
             if len(vals) >= 2:
-                # 連続増配年数
                 inc_count = 0
                 for i in range(len(vals) - 1, 0, -1):
                     if vals[i] > vals[i-1]:
@@ -137,7 +134,6 @@ def get_stock_data(code):
                     else:
                         break
                 
-                # 非減配年数
                 non_dec_count = 0
                 for i in range(len(vals) - 1, 0, -1):
                     if vals[i] >= vals[i-1]:
@@ -145,7 +141,6 @@ def get_stock_data(code):
                     else:
                         break
                         
-                # 全期間の増減配カウント
                 total_inc = 0
                 total_dec = 0
                 for i in range(1, len(vals)):
@@ -159,7 +154,6 @@ def get_stock_data(code):
                 result["increase_count"] = total_inc
                 result["decrease_count"] = total_dec
                 
-                # 平均増配率 (CAGR) の計算 (直近数年、最大5年間)
                 valid_annual = annual[annual > 0]
                 if len(valid_annual) >= 3:
                     start_val = valid_annual.iloc[-min(5, len(valid_annual))]
@@ -267,7 +261,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # ---------------------------------------------------------
 with tab1:
     st.subheader("💰 保有銘柄一覧（10銘柄リスト）")
-    st.write("保有している10銘柄の状況を一覧で確認できます。")
+    st.write("口座管理の最新状況に合わせた保有10銘柄のリストです。")
     
     display_df = pd.DataFrame({
         "コード": df_portfolio["code"],
@@ -385,7 +379,7 @@ with tab2:
                 item5_stat = f"🔴 要注意 (減配{dec_cnt}回あり)"
                 item5_desc = f"過去に複数回（{dec_cnt}回）の減配実績があります。"
 
-            # 6. 増配率（平均増配率 CAGR 自動計算）
+            # 6. 増配率
             cagr_val = s_data["cagr"]
             annual_df = s_data["annual_divs"]
             history_str = " → ".join([f"{yr}: {val:.1f}円" for yr, val in list(annual_df.items())[-5:]]) if not annual_df.empty else "データなし"
@@ -404,7 +398,7 @@ with tab2:
                 item6_stat = "ℹ️ データ確認中"
                 item6_desc = f"配当履歴から増配率を算出できませんでした。\n(推移: {history_str})"
 
-            # 7. 累進配当方針（キーワード自動判定）
+            # 7. 累進配当方針
             if s_data["has_progressive_policy"]:
                 item7_stat = "🟢 合格 (累進配当・安定還元方針あり)"
                 item7_desc = "企業の英文概要・方針テキストから「累進配当」「DOE」「安定配当」などのキーワードを検知しました。"
@@ -499,7 +493,7 @@ with tab4:
         with ic1:
             st.link_button("Yahoo!ファイナンス", yahoo_url(code), use_container_width=True)
         with ic2:
-            st.link_button("📚 IR BANK", irbank_url(code), use_container_width=Thread if 'Thread' in globals() else irbank_url(code)) # 修正
+            st.link_button("📚 IR BANK", irbank_url(code), use_container_width=True)
         st.divider()
 
 # =========================================================
